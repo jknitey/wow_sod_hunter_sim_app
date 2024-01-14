@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 hunter = {}
@@ -792,7 +793,6 @@ def report(trials):
   st.write(f'\nPercent hunter damage: {100 - pet_dmg}%')
   st.write(f'\nPercent pet damage: {pet_dmg}%')
 
-  import matplotlib.pyplot as plt
   fig = plt.figure(figsize=(5,2))
   ax = fig.add_subplot(111)
   ax.hist(dps)
