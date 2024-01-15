@@ -928,7 +928,7 @@ col1, col2 = st.columns(2)
 with col1:
     ex_hit = st.slider('extra hit percent:', 0, 10, 1, 1)
 with col2:
-    ex_ap = st.slider('extra ap:', 0, 50, 0, 1)
+    ex_ap = st.slider('extra ap:', 0, 200, 0, 1)
 
 glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=0)
 spec = st.text_input('Talents url:', 'https://www.wowhead.com/classic/talent-calc/hunter/05003200501')
