@@ -882,25 +882,35 @@ def app_report(trials):
 
   results = results.drop(['count','dmg'],axis = 1).sort_values('expected_dmg',ascending=False)
 
-  st.header('Simulation results:')
-  st.write('Average dps', np.mean(dps).round(1))
-  st.write('Max dps', np.max(dps))
-  st.write('dps std', np.std(dps).round(1))
+  st.sidebar.header('Simulation results:')
+  st.sidebar.write('Average dps', np.mean(dps).round(1))
+  st.sidebar.write('Max dps', np.max(dps))
+  st.sidebar.write('dps std', np.std(dps).round(1))
 
-  st.write(f'\nPercent hunter damage: {100 - pet_dmg}%')
-  st.write(f'\nPercent pet damage: {pet_dmg}%')
+  st.sidebar.write(f'\nPercent hunter damage: {100 - pet_dmg}%')
+  st.sidebar.write(f'\nPercent pet damage: {pet_dmg}%')
 
   fig = plt.figure(figsize=(5,2))
   ax = fig.add_subplot(111)
   ax.hist(dps)
+  plt.title('Simulations')
   plt.ylabel('trials')
   plt.xlabel('dps')
 
-  st.pyplot(fig)
+  st.sidebar.pyplot(fig)
   
-  st.write(results)
+  st.sidebar.write(results)
 
   return None
+
+
+# Initial page config
+
+st.set_page_config(
+     page_title='Streamlit cheat sheet',
+     layout="wide",
+     initial_sidebar_state="expanded",
+)
 
 
 ### App UI ###
@@ -910,43 +920,58 @@ st.title("WoW SOD Melee Hunter Simulator")
 st.write('app builder: discord: zzenn777 | sim builder: flori-Lone Wolf US: discord: bloodflori')
 st.write('Please report any bugs to discord: @zzenn777')
 
-st.header('Hunter specs')
+st.header('Hunter specs', divider=True)
 
-race_wid = st.selectbox('race:', ['meme', 'orc', 'troll'], index=0)
-
-# Display mh and oh next to each other
-col1, col2 = st.columns(2)
-with col1:
-    strength = st.slider('strength:', 0, 500, 65, 1)
-    intel = st.slider('intelligence:', 0, 500, 500, 1)
-with col2:
-    agi = st.slider('agility:', 0, 500, 164, 1)
-    spirit = st.slider('spirit:', 0, 500, 500, 1)
-
-st.write('Extra stats')
-col1, col2 = st.columns(2)
-with col1:
-    ex_hit = st.slider('extra hit percent:', 0, 10, 1, 1)
-with col2:
-    ex_ap = st.slider('extra ap:', 0, 200, 0, 1)
-
-glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=0)
-spec = st.text_input('Talents url:', 'https://www.wowhead.com/classic/talent-calc/hunter/05003200501')
-
-st.header('Weapon specs')
+race_wid = st.selectbox('race:', ['other', 'orc', 'troll'], index=0)
 
 # Display mh and oh next to each other
 col1, col2 = st.columns(2)
+with col1:
+    strength = st.number_input('strength:', min_value=0, value=65, step=1)
+    intel = st.number_input('intelligence:', min_value=0, value=50, step=1)
+
+with col2:
+    agi = st.number_input('agility:', min_value=0, value=165, step=1)
+    spirit = st.number_input('spirit:', min_value=0, value=50, step=1)
+
+st.subheader('Extra stats')
+col1, col2, col3 = st.columns(3)
+with col1:
+    ex_hit = st.number_input('extra hit percent:', min_value=0, value=0, step=1)
+with col2:
+    ex_ap = st.number_input('extra ap:', min_value=0, value=0, step=1)
+with col3:
+  glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=2)
+
+spec = st.text_input('Input talents url from wowhead:', 'https://www.wowhead.com/classic/talent-calc/hunter/05003200501')
+st.markdown("[Wowhead hunter talents url](https://www.wowhead.com/classic/talent-calc/hunter)")
+
+# Display mh and oh next to each other
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.header('Main Hand (MH)')
+    chest_runes = st.selectbox('Chest rune:', ['lion', 'lone wolf'], index=0)
+
+with col2:
+    leg_runes = st.selectbox('Leg rune:', ['flanking'], index=0)
+
+with col3:
+    hand_runes = st.selectbox('Hand rune:', ['beast master'], index=0)
+
+st.header('Weapon specs', divider=True)
+
+# Display mh and oh next to each other
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader('Main Hand (MH)')
     wep_proc_wid1 = st.selectbox('mh proc:', ['shadowfang', 'talwar', 'meteor', 'hydra', 'fathom', 'bloodpike', 'duskbringer', 'grimclaw', "serra'kis", 'None'], index=1)
     wep_spd1 = st.number_input('mh speed:', min_value=0.1, value=2.7, step=0.1)
     mh_range = st.slider('mh dmg', 0, 200, (43, 82))
     mh_race_wep_wid = st.checkbox('mh race wep spec')
 
 with col2:
-    st.header('Off Hand (OH)')
+    st.subheader('Off Hand (OH)')
     wep_proc_wid2 = st.selectbox('oh proc:', ['gust', 'meteor', 'grimclaw', 'bootknife', "serra'kis", 'None'], index=2)
     wep_spd2 = st.number_input('oh speed:', min_value=0.1, value=1.4, step=0.1)
     oh_range = st.slider('oh dmg', 0, 200, (21, 38))
@@ -958,36 +983,21 @@ if twoh_wid == True:
     wep_spd2 = 0.0
     oh_range = (0,0)
 
-st.header('Pet specs')
+st.header('Pet specs', divider=True)
 
 col1, col2 = st.columns(2)
 with col1:
     pett = st.selectbox('pet:', ['ws', 'cat'], index=0)
 with col2:
-   pett_spd = st.number_input('pet speed:', min_value=0.1, value=2.0, step=0.1)
+  pett_spd = st.number_input('pet speed:', min_value=0.1, value=2.0, step=0.1)
 
 pett_range = st.slider('pet dmg', 0, 150, (82, 96), 1)
-pett_ap = st.slider('pet ap:', 0, 300, 190, 1)
+pett_ap = st.number_input('pet ap:', min_value=0, value=50, step=1)
 
-st.header('Fight simulation specs')
+st.header('Fight simulation specs', divider=True)
 duration_wid = st.number_input('Fight duration:', min_value=5, value=45, step=5)
 
-# Display mh and oh next to each other
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.header('Chest rune:')
-    chest_runes = st.selectbox('Chest rune:', ['lion', 'lone wolf'], index=0)
-
-with col2:
-    st.header('Leg rune:')
-    leg_runes = st.selectbox('Leg rune:', ['flanking'], index=0)
-
-with col3:
-    st.header('Hand rune:')
-    hand_runes = st.selectbox('Hand rune:', ['beast master'], index=0)
-
-st.header('Buffs:')
+st.subheader('Buffs:')
 col1, col2, col3 = st.columns(3)
 with col1:
     consume_wid = st.checkbox('consumes')
@@ -1002,11 +1012,12 @@ pvp_wid = st.checkbox('ashen buff')
 
 iter = st.number_input('Number of iterations:', min_value=100, value=100, step=100)
 
-if st.button('Calculate DPS'):
+
+if st.sidebar.button('Calculate DPS'):
     global trials
     trials = []
 
-    progress_bar = st.progress(0)
+    progress_bar = st.sidebar.progress(0)
 
     for i in range(iter):
         trials.append(run_sim())
