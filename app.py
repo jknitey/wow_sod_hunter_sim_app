@@ -12,6 +12,10 @@ warnings.filterwarnings("ignore")
 hunter = {}
 pet = {}
 
+# Initialize session state
+if 'prev_sims' not in st.session_state:
+    st.session_state.prev_sims = []
+
 ########################################################
       #### Below code from flori's notebook ####
 ########################################################
@@ -887,6 +891,11 @@ def app_report(trials):
   st.sidebar.write('Max dps', np.max(dps))
   st.sidebar.write('dps std', np.std(dps).round(1))
 
+  # Append mean DPS to prev_sims
+  if dps:  # Check if dps is not empty
+      st.session_state.prev_sims.append(np.mean(dps).round(1))
+
+
   st.sidebar.write(f'\nPercent hunter damage: {100 - pet_dmg}%')
   st.sidebar.write(f'\nPercent pet damage: {pet_dmg}%')
 
@@ -1026,3 +1035,10 @@ if st.sidebar.button('Calculate DPS'):
         progress_bar.progress((i + 1) / iter)
 
     app_report(trials)
+  
+st.sidebar.subheader('Previous Simulations:')
+if st.session_state.prev_sims:
+  st.sidebar.write(pd.DataFrame({'Avg. DPS': st.session_state.prev_sims}))
+
+  if st.sidebar.button('Reset previous sims'):
+     st.session_state.prev_sims = []
