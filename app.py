@@ -905,7 +905,7 @@ def app_report(trials):
 
 ### App UI ###
 # Header
-st.title("WoW SOD Hunter Simulator")
+st.title("WoW SOD Melee Hunter Simulator")
 
 st.write('app builder: discord: zzenn777 | sim builder: flori-Lone Wolf US: discord: bloodflori')
 st.write('Please report any bugs to discord: @zzenn777')
@@ -926,7 +926,7 @@ with col2:
 st.write('Extra stats')
 col1, col2 = st.columns(2)
 with col1:
-    ex_hit = st.slider('extra hit:', 0, 10, 1, 1)
+    ex_hit = st.slider('extra hit percent:', 0, 10, 1, 1)
 with col2:
     ex_ap = st.slider('extra ap:', 0, 50, 0, 1)
 
