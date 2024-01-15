@@ -943,15 +943,6 @@ with col2:
     agi = st.number_input('agility:', min_value=0, value=165, step=1)
     spirit = st.number_input('spirit:', min_value=0, value=50, step=1)
 
-st.subheader('Extra stats')
-col1, col2, col3 = st.columns(3)
-with col1:
-    ex_hit = st.number_input('extra hit percent:', min_value=0, value=0, step=1)
-with col2:
-    ex_ap = st.number_input('extra ap:', min_value=0, value=0, step=1)
-with col3:
-  glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=2)
-
 spec = st.text_input('Input talents url from wowhead:', 'https://www.wowhead.com/classic/talent-calc/hunter/05003200501')
 st.markdown("[Wowhead hunter talents url](https://www.wowhead.com/classic/talent-calc/hunter)")
 
@@ -966,6 +957,15 @@ with col2:
 
 with col3:
     hand_runes = st.selectbox('Hand rune:', ['beast master'], index=0)
+
+st.subheader('Extra stats')
+col1, col2, col3 = st.columns(3)
+with col1:
+    ex_hit = st.number_input('extra hit percent:', min_value=0, value=0, step=1)
+with col2:
+    ex_ap = st.number_input('extra ap:', min_value=0, value=0, step=1)
+with col3:
+  glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=2)
 
 st.header('Weapon specs', divider=True)
 
