@@ -3,12 +3,20 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
 
+
+# Ignore all warnings
+warnings.filterwarnings("ignore")
 
 hunter = {}
 pet = {}
 
-#title Hunter Setup
+########################################################
+      #### Below code from flori's notebook ####
+########################################################
+
+#@title Hunter Setup
 def make_hunter(weapons, attributes):
 
     hunter = {}
@@ -93,8 +101,7 @@ def make_hunter(weapons, attributes):
 
     return hunter
 
-
-#title Auto Attack
+#@title Auto Attack
 def melee(mh):
 
     if mh == True:
@@ -109,8 +116,7 @@ def melee(mh):
 
     return (min_dmg, max_dmg)
 
-
-#title Windfury Attack
+#@title Windfury Attack
 def windfury_proc(wf_mod = 1.2):
 
     min_dmg = (hunter['ap'] * wf_mod)/14 * hunter['spd'][0] + hunter['wep'][0][0]
@@ -118,8 +124,7 @@ def windfury_proc(wf_mod = 1.2):
 
     return (min_dmg, max_dmg)
 
-
-#title Pet Auto Attack
+#@title Pet Auto Attack
 def pet_auto():
 
     if rbuff_wid == True:
@@ -132,8 +137,7 @@ def pet_auto():
 
     return (min_dmg, max_dmg)
 
-
-#title Melee Attack Table
+#@title Melee Attack Table
 def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
 
     if pet == True:
@@ -273,8 +277,7 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
 
     return res
 
-
-#title Sim Auto Attacks
+#@title Sim Auto Attacks
 def sim_autos(duration):
 
   n_mh = int(np.floor(duration / hunter['spd'][0]))
@@ -337,8 +340,7 @@ def sim_autos(duration):
 
   return log
 
-
-#title Sim FS/WC Rotation
+#@title Sim FS/WC Rotation
 def sim_rotation(duration):
 
     globals = np.floor(duration / 1.5)
@@ -374,8 +376,7 @@ def sim_rotation(duration):
 
     return log
 
-
-#title Sim Raptor Strike Placements
+#@title Sim Raptor Strike Placements
 def sim_raptor_strikes(white, yellow, duration):
 
     mh_hits = white[white.attack.str.contains('mh')]
@@ -417,8 +418,7 @@ def sim_raptor_strikes(white, yellow, duration):
 
     return log
 
-
-#title Sim Windfury Procs
+#@title Sim Windfury Procs
 def sim_windfury(combat_log):
 
     valid_hits = combat_log[(combat_log.attack.str.contains('fs')) | (combat_log.attack.str.contains('wc')) | (combat_log.attack.str.contains('mh'))]
@@ -446,8 +446,7 @@ def sim_windfury(combat_log):
 
     return wf_procs
 
-
-#title Sim Weapon Procs
+#@title Sim Weapon Procs
 def sim_weapon_procs(combat_log, mh, proc):
 
     if (mh == True) | (twoh_wid == True):
@@ -500,8 +499,7 @@ def sim_weapon_procs(combat_log, mh, proc):
 
     return wep_procs
 
-
-#title Sim Red Whelp Gloves
+#@title Sim Red Whelp Gloves
 def sim_whelp_gloves(combat_log):
 
     valid_hits = combat_log[(~combat_log.attack.str.contains('pet')) & (combat_log.dmg != 0)]
@@ -519,8 +517,7 @@ def sim_whelp_gloves(combat_log):
 
     return rwg_procs
 
-
-#title Sim Mana Usage
+#@title Sim Mana Usage
 def sim_mana(combat_log):
 
     mana = float(hunter['mana'])
@@ -540,8 +537,7 @@ def sim_mana(combat_log):
 
     return total_mana
 
-
-#title Sim Pet Damage
+#@title Sim Pet Damage
 def sim_pet(duration):
 
     pet_info = {'ws': {'dmg': (36,40), 'cost': 50, 'mod': 1.07},
@@ -662,8 +658,7 @@ def sim_pet(duration):
 
     return pet_hits, pet_casts
 
-
-#title Sim Encounter
+#@title Sim Encounter
 def sim_fight(duration, coh):
 
     white = sim_autos(duration)
@@ -762,10 +757,112 @@ def sim_fight(duration, coh):
 
     return combat_log, dmg_done
 
-
-#title Report Results
+#@title Report Results
 
 def report(trials):
+
+  results = pd.concat([x[1] for x in trials]).drop(['avg_hit'],axis = 1)
+  results_sum = results[['attack','dmg','count']].groupby('attack').sum()
+  results_min = results[['attack','min_hit']].groupby('attack').min()
+  results_max = results[['attack','max_hit']].groupby('attack').max()
+
+  results = results_sum.join(results_min).join(results_max)
+  results['avg_hit'] = (results['dmg'] / results['count']).astype(int)
+  results['expected_casts'] = (results['count'] / iter).round(2)
+  results['expected_dmg'] = (results['dmg'] / iter).astype(int)
+
+  results = results.reset_index()
+
+  dps = [(x[1].dmg.sum()/duration).round(1) for x in trials]
+
+  pet_dmg = int((results[results.attack.str.contains('pet')].dmg.sum() / results.dmg.sum()).round(2) * 100)
+
+  results = results.drop(['count','dmg'],axis = 1).sort_values('expected_dmg',ascending=False)
+
+  print('\n')
+  print(('avg', np.mean(dps).round(1),'max', np.max(dps), 'std', np.std(dps).round(1)))
+  print(f'\nhunter: {100 - pet_dmg}%\npet: {pet_dmg}%')
+  print('\n')
+
+  import matplotlib.pyplot as plt
+  fig = plt.figure(figsize=(4,2))
+  ax = fig.add_subplot(111)
+  ax.hist(dps)
+  plt.ylabel('trials')
+  plt.xlabel('dps')
+  plt.show()
+
+  print('\n\n\nsummary over all iterations:')
+  display(results)
+
+  print('\n\n\nrandom iteration:')
+  random_trial = trials[0][1]
+  random_trial['dps'] = (random_trial['dmg'] / duration).round(1)
+  random_trial = random_trial[['attack','min_hit','avg_hit','max_hit','count','dmg']]
+  display(random_trial)
+
+  print('\n\n\nrandom combat log:')
+  random_log = trials[0][0]
+  random_log.dmg = random_log.dmg.round(1)
+  random_log.total_dmg = random_log.total_dmg.round(1)
+  display(random_log)
+
+  return None
+
+#@title Sim Orchestration
+
+def run_sim():
+
+  if twoh_wid == False:
+    weapons = {'dmg': ((mh_range[0],oh_range[0]),(mh_range[1],oh_range[1])),
+               'spd': (wep_spd1,wep_spd2)}
+
+  else:
+    weapons = {'dmg': ((mh_range[0],0),(mh_range[1],0)),
+               'spd': (wep_spd1,0)}
+
+  attributes = {'str': strength,
+                'agi': agi,
+                'int': intel,
+                'spirit': spirit,
+                'hit': ex_hit,
+                'spec':spec}
+
+  hunter = make_hunter(weapons, attributes)
+  globals()['hunter'] = hunter
+
+  pet = {'dmg': pett_range,
+         'spd': pett_spd,
+         'ap': pett_ap,
+         'type': pett}
+
+  if consume_wid == True:
+    pet['ap'] = pet['ap'] + 16 # pets get 2 ap for 1 str
+
+  if rbuff_wid == True:
+    pet['ap'] = pet['ap'] + 55 + 60 # might and shout
+
+  globals()['pet'] = pet
+
+  global duration
+  duration = duration_wid
+  iterations = iter
+
+  if (wep_proc_wid1 == 'None') and (wep_proc_wid2 == 'None'):
+    coh = None
+  elif (twoh_wid == False):
+    coh = [wep_proc_wid1, wep_proc_wid2]
+  elif (twoh_wid == True):
+    coh = [wep_proc_wid1, None]
+
+  return sim_fight(duration, coh = coh)
+
+########################################################
+      #### Above code from flori's notebook ####
+########################################################
+
+
+def app_report(trials):
 
   results = pd.concat([x[1] for x in trials]).drop(['avg_hit'],axis = 1)
   results_sum = results[['attack','dmg','count']].groupby('attack').sum()
@@ -806,59 +903,12 @@ def report(trials):
   return None
 
 
-#title Sim Orchestration
-def run_sim():
-
-  if twoh_wid == False:
-    weapons = {'dmg': ((mh_range[0],oh_range[0]),(mh_range[1],oh_range[1])),
-               'spd': (wep_spd1,wep_spd2)}
-
-  else:
-    weapons = {'dmg': ((mh_range[0],0),(mh_range[1],0)),
-               'spd': (wep_spd1,0)}
-
-  attributes = {'str': strength,
-                'agi': agi,
-                'int': intel,
-                'spirit': spirit,
-                'hit': ex_hit,
-                'spec':spec}
-
-  hunter = make_hunter(weapons, attributes)
-  globals()['hunter'] = hunter
-
-  pet = {'dmg': pett_range,
-         'spd': pett_spd,
-         'ap': pett_ap,
-         'type': pett}
-
-  if consume_wid == True:
-    pet['ap'] = pet['ap'] + 16 # pets get 2 ap for 1 str
-
-  if rbuff_wid == True:
-    pet['ap'] = pet['ap'] + 55 + 60 # might and shout
-
-  globals()['pet'] = pet
-
-  global duration
-  duration = duration_wid
-
-  if (wep_proc_wid1 == 'None') and (wep_proc_wid2 == 'None'):
-    coh = None
-  elif (twoh_wid == False):
-    coh = [wep_proc_wid1, wep_proc_wid2]
-  elif (twoh_wid == True):
-    coh = [wep_proc_wid1, None]
-
-  return sim_fight(duration, coh = coh)
-
-
 ### App UI ###
 # Header
 st.title("WoW SOD Hunter Simulator")
 
-st.write('Sim brains: flori-Lone Wolf US: discord: bloodflori')
-st.write('Co-creator: discord: zzenn777')
+st.write('app builder: discord: zzenn777 | sim builder: flori-Lone Wolf US: discord: bloodflori')
+st.write('Please report any bugs to discord: @zzenn777')
 
 st.header('Hunter specs')
 
@@ -964,5 +1014,4 @@ if st.button('Calculate DPS'):
         # Update the progress bar
         progress_bar.progress((i + 1) / iter)
 
-    report(trials)
-
+    app_report(trials)
