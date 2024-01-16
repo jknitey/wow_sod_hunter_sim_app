@@ -28,13 +28,20 @@ def make_hunter(weapons, attributes):
     # attributes
     hunter['str'] = attributes['str']
     hunter['agi'] = attributes['agi']
+    hunter['spirit'] = attributes['spirit']
+    hunter['int'] = attributes['int']
 
     if rbuff_wid == True:
         hunter['str'] = hunter['str'] + 4
         hunter['agi'] = hunter['agi'] + 4
 
+    if chest_runes == 'lion':
+       hunter['agi'] = hunter['agi'] * 1.20
+       hunter['str'] = hunter['str'] * 1.20
+       hunter['spirit'] = hunter['spirit'] * 1.20
+       hunter['int'] = hunter['int'] * 1.20
+    
     hunter['mana'] = ((attributes['int'] - 34) * 15) + 841
-    hunter['spirit'] = attributes['spirit']
 
     try:
       talent_points = attributes['spec'].split('hunter/')[1]
@@ -926,14 +933,14 @@ st.set_page_config(
 # Header
 st.title("WoW SOD Melee Hunter Simulator")
 
-st.write('app builder: discord: zzenn777 | sim builder: flori-Lone Wolf US: discord: bloodflori')
+st.write('app builder: discord: zzenn777 | sim builder: discord: bloodflori')
 st.write('Please report any bugs to discord: @zzenn777')
 
 st.header('Hunter specs', divider=True)
 
 race_wid = st.selectbox('race:', ['other', 'orc', 'troll'], index=0)
 
-# Display mh and oh next to each other
+st.write('<span style="color: red;">Enter stats without lion rune.</span>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
     strength = st.number_input('strength:', min_value=0, value=65, step=1)
@@ -969,7 +976,7 @@ with col3:
 
 st.header('Weapon specs', divider=True)
 
-# Display mh and oh next to each other
+st.write('<span style="color: red;">Weapon stats come from the item tooltip NOT the character panel.</span>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 
 with col1:
@@ -1000,6 +1007,7 @@ with col1:
 with col2:
   pett_spd = st.number_input('pet speed:', min_value=0.1, value=2.0, step=0.1)
 
+st.write('<span style="color: red;">If using lion rune, enter stats with lion to avoid pet scaling.</span>', unsafe_allow_html=True)
 pett_range = st.slider('pet dmg', 0, 150, (82, 96), 1)
 pett_ap = st.number_input('pet ap:', min_value=0, value=50, step=1)
 
