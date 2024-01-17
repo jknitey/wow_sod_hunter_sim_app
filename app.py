@@ -28,20 +28,13 @@ def make_hunter(weapons, attributes):
     # attributes
     hunter['str'] = attributes['str']
     hunter['agi'] = attributes['agi']
-    hunter['spirit'] = attributes['spirit']
-    hunter['int'] = attributes['int']
 
     if rbuff_wid == True:
         hunter['str'] = hunter['str'] + 4
         hunter['agi'] = hunter['agi'] + 4
 
-    if chest_runes == 'lion':
-       hunter['agi'] = hunter['agi'] * 1.20
-       hunter['str'] = hunter['str'] * 1.20
-       hunter['spirit'] = hunter['spirit'] * 1.20
-       hunter['int'] = hunter['int'] * 1.20
-    
     hunter['mana'] = ((attributes['int'] - 34) * 15) + 841
+    hunter['spirit'] = attributes['spirit']
 
     try:
       talent_points = attributes['spec'].split('hunter/')[1]
@@ -923,7 +916,7 @@ def app_report(trials):
 # Initial page config
 
 st.set_page_config(
-     page_title='Streamlit cheat sheet',
+     page_title='WoW SOD Melee Hunter Simulator',
      layout="wide",
      initial_sidebar_state="expanded",
 )
@@ -936,11 +929,50 @@ st.title("WoW SOD Melee Hunter Simulator")
 st.write('app builder: discord: zzenn777 | sim builder: discord: bloodflori')
 st.write('Please report any bugs to discord: @zzenn777')
 
+# Add Text Section for User Instructions
+st.header("Instructions:", divider=True)
+st.markdown("""
+Enter your stats:
+
+- Weapon stats come from the item tooltip NOT the character panel
+- To sim 2h, set all the offhand options to 0 and select 'Twohand'
+- Character and pet stats come from the character panel
+- You should have on lion and hawk when transferring your stats to the sim (so we can bypass stat scaling from hunter to pet)
+- Extra stats come from item tooltips (i.e. hit/ap on crafting items or weps)
+
+Set encounter info:
+
+- Rune setup is assumed to be melee bis (lion, bm, flanking)
+- Enter talents using wowhead sod calc url. Default is bm: [BM Talent Calculator](https://www.wowhead.com/classic/talent-calc/hunter/05003200501)
+- Duration is encounter length in seconds
+- Iterations is the number of simulations to run (use 3k+ for settings similar to wowsims)
+
+Set additional options:
+
+- Enchants (wep dmg)
+- Consumes (mana potion, minor recombobulator, offhand stone, elixirs, pet scrolls)
+- Catfury
+- Raid buffs (shout, might, mark, int)
+- World buffs (dmf, bfd, ashen)
+
+
+Things This Sim Is Good At:
+
+- Comparing gear options
+- Comparing dps without optimal setups (enchants, buffs, wf)
+- Comparing SV vs BM on SHORT fights (<45s, where flanking reset is less likely)
+
+Things This Sim Is Not Good At:
+
+- Getting 100%/ accurate raid dps numbers (sims are for comps and i am not implementing boss armor/resist)
+- Very long fight lengths (>120s, on longer fights fishing and mana regen are more important -- all fights in bfd are under 2 min)
+
+""")
+
 st.header('Hunter specs', divider=True)
 
 race_wid = st.selectbox('race:', ['other', 'orc', 'troll'], index=0)
 
-st.write('<span style="color: red;">Enter stats without lion rune.</span>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
     strength = st.number_input('strength:', min_value=0, value=65, step=1)
@@ -976,7 +1008,6 @@ with col3:
 
 st.header('Weapon specs', divider=True)
 
-st.write('<span style="color: red;">Weapon stats come from the item tooltip NOT the character panel.</span>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 
 with col1:
@@ -1007,9 +1038,8 @@ with col1:
 with col2:
   pett_spd = st.number_input('pet speed:', min_value=0.1, value=2.0, step=0.1)
 
-st.write('<span style="color: red;">If using lion rune, enter stats with lion to avoid pet scaling.</span>', unsafe_allow_html=True)
 pett_range = st.slider('pet dmg', 0, 150, (82, 96), 1)
-pett_ap = st.number_input('pet ap:', min_value=0, value=50, step=1)
+pett_ap = st.number_input('pet ap:', min_value=0, value=190, step=1)
 
 st.header('Fight simulation specs', divider=True)
 duration_wid = st.number_input('Fight duration:', min_value=5, value=45, step=5)
