@@ -100,7 +100,7 @@ def make_hunter(weapons, attributes):
 
     if race_wid == 'orc':
       base_ap =  hunter['str'] +  hunter['agi'] + (25 * 2) - 20
-      orc_bonus = (base_ap * 0.25) * 15 / duration_wid # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
+      orc_bonus = (base_ap * 0.25) * 15 / duration # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
       hunter['ap'] = hunter['ap'] + orc_bonus
 
     return hunter
@@ -816,6 +816,8 @@ def report(trials):
 #@title Sim Orchestration
 
 def run_sim():
+  global duration
+  duration = duration_wid
 
   if twoh_wid == False:
     weapons = {'dmg': ((mh_range[0],oh_range[0]),(mh_range[1],oh_range[1])),
@@ -848,8 +850,6 @@ def run_sim():
 
   globals()['pet'] = pet
 
-  global duration
-  duration = duration_wid
   iterations = iter
 
   if (wep_proc_wid1 == 'None') and (wep_proc_wid2 == 'None'):
