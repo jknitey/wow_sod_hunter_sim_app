@@ -100,7 +100,7 @@ def make_hunter(weapons, attributes):
 
     if race_wid == 'orc':
       base_ap =  hunter['str'] +  hunter['agi'] + (25 * 2) - 20
-      orc_bonus = (base_ap * 0.25) * 15 / duration # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
+      orc_bonus = (base_ap * 0.25) * 15 / duration_wid # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
       hunter['ap'] = hunter['ap'] + orc_bonus
 
     return hunter
