@@ -555,6 +555,8 @@ def sim_rotation(flankings):
 
     for t in cast_times:
 
+      if carve_prio == 5: carve_prio = 1
+
       if carve_prio == 1:
 
         dmg = attack_table(roll = np.random.randint(0,1001), mh = True, hit = hunter['hit'], spell = 'carve')
@@ -565,7 +567,8 @@ def sim_rotation(flankings):
         dmg = attack_table(roll = np.random.randint(0,1001), mh = True, hit = hunter['hit'], spell = 'wc')
         events += [(t, dmg[0], dmg[1] * 0.5)]
 
-      carve_prio *= -1
+      carve_prio += 1
+
 
     casts = pd.DataFrame(events, index = np.arange(len(cast_times)), columns = ['time','attack','dmg'])
 
