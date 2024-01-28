@@ -32,6 +32,11 @@ def make_hunter(weapons, attributes):
     hunter['agi'] = attributes['agi']
     hunter['spirit'] = attributes['spirit']
     hunter['int'] = attributes['int']
+    hunter['base_mana'] = hunter['int'] * 15
+
+    race_agi_bonuses = {'tauren':0,'dwarf':1,'orc':2,'troll':7,'night elf':8}
+    hunter['agi'] = hunter['agi'] - 8 # normalize racial bonuses to prevent double dipping from selector
+    hunter['agi'] = hunter['agi'] + race_agi_bonuses[race_wid]
 
     if rbuff_wid == True:
         hunter['str'] = hunter['str'] + 4
@@ -44,17 +49,17 @@ def make_hunter(weapons, attributes):
 
     talents = {}
     try:
-      talents['bm'] = [x for x in talent_points.split('-')[0]]
+      talents['bm'] = [int(x) for x in talent_points.split('-')[0]]
     except:
-      talents['bm'] = ['0']
+      talents['bm'] = [0]
     try:
-      talents['mm'] = [x for x in talent_points.split('-')[1]]
+      talents['mm'] = [int(x) for x in talent_points.split('-')[1]]
     except:
-      talents['mm'] = ['0']
+      talents['mm'] = [0]
     try:
-      talents['sv'] = [x for x in talent_points.split('-')[2]]
+      talents['sv'] = [int(x) for x in talent_points.split('-')[2]]
     except:
-      talents['sv'] = ['0']
+      talents['sv'] = [0]
 
     hunter['spec'] = talents
     hunter['hit'] = attributes['hit']
@@ -82,16 +87,42 @@ def make_hunter(weapons, attributes):
       hunter['str'] = hunter['str'] + 8
 
     # lion
+    lion_buff = 1
+
     if chest_runes == 'lion':
-      hunter['agi'] *= 1.2
-      hunter['str'] *= 1.2
-      hunter['int'] *= 1.2
-      hunter['spirit'] *= 1.2
+      lion_buff = 1.2
+
     elif kings_wid == True:
-      hunter['agi'] *= 1.1
-      hunter['str'] *= 1.1
-      hunter['int'] *= 1.1
-      hunter['spirit'] *= 1.1
+      lion_buff = 1.1
+
+    hunter['str'] *= lion_buff
+    hunter['int'] *= lion_buff
+    hunter['spirit'] *= lion_buff
+
+    agi_lion_buff = 1
+
+    if chest_runes == 'lion':
+      try:
+        if hunter['spec']['sv'][14] != 0:
+          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.2
+      except:
+        pass
+
+    elif kings_wid == True:
+      try:
+        if hunter['spec']['sv'][14] != 0:
+          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.1
+      except:
+        pass
+
+    else:
+      try:
+        if hunter['spec']['sv'][14] != 0:
+          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03)
+      except:
+        pass
+
+    hunter['agi'] *= agi_lion_buff
 
     hunter['mana'] = ((attributes['int'] - 34) * 15) + 841
 
@@ -102,7 +133,7 @@ def make_hunter(weapons, attributes):
 
     # melee stats
     hunter['crit'] = 3.09 + (0.052 * (hunter['agi'] - 60))
-    hunter['ap'] = 118 + (hunter['str'] - 28) + (hunter['agi'] - 60)
+    hunter['ap'] = (level * 2) + hunter['str'] + hunter['agi'] - 20 + ex_ap
 
     if bfd_wid == True:
         hunter['crit'] = hunter['crit'] = 2
@@ -112,17 +143,21 @@ def make_hunter(weapons, attributes):
         hunter['ap'] = hunter['ap'] + 60 + 55
         hunter['mana'] = hunter['mana'] + (7 * 15)
 
-    hunter['ap'] = hunter['ap'] + ex_ap
-
     if race_wid == 'orc':
-      base_ap =  hunter['str'] +  hunter['agi'] + (25 * 2) - 20
+      base_ap =  hunter['str'] +  hunter['agi'] + (level * 2) - 20
       orc_bonus = (base_ap * 0.25) * 15 / duration # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
       hunter['ap'] = hunter['ap'] + orc_bonus
 
-    hunter['rap'] = (2 * hunter['agi']) + (25 * 2) - 10 + ex_ap + ex_rap + 35
+    hunter['rap'] = (2 * hunter['agi']) + (level * 2) - 10 + ex_ap + ex_rap + 35
 
     if chest_runes == 'master marksman':
       hunter['crit'] += 5
+
+    try:
+      if hunter['spec']['sv'][12] != 0:
+          hunter['crit'] += int(hunter['spec']['sv'][12])
+    except:
+      pass
 
     return hunter
 
@@ -608,7 +643,7 @@ def sim_windfury(combat_log):
     valid_hits = valid_hits[~valid_hits.attack.str.contains('pet')]
 
     windfury = {'state': 'ready', 'cd': 0}
-    windfury_cd = 3
+    windfury_cd = 1
     wf_procs = []
 
     for i,event in valid_hits.iterrows():
@@ -724,6 +759,37 @@ def sim_mana(combat_log):
 
     return total_mana
 
+#@title Sim Frenzy
+def sim_frenzy(pet_log):
+
+    crits = pet_log[pet_log.attack.str.contains('crit')]
+
+    frenzy_crits = []
+
+    for i,row in crits.iterrows():
+
+      roll = np.random.randint(0,1000)
+
+      if roll <= hunter['spec']['bm'][14] * 200:
+        frenzy_crits += [row]
+
+    frenzy_uptime = pd.DataFrame(frenzy_crits).time.diff().fillna(0).clip(0,8).sum()
+
+    n_extra_swings = int(np.ceil(frenzy_uptime / pet['spd'] * 0.3))
+
+    extra_swings = pet_log[~(pet_log.attack.str.contains('claw') | pet_log.attack.str.contains('bite') | pet_log.attack.str.contains('cast'))]
+    extra_swings = extra_swings[(extra_swings.time <= 120) & (extra_swings.time >= 18)].sample(n_extra_swings)
+
+    assert len(extra_swings) == n_extra_swings
+
+    extra_swings.attack = ['pet frenzy ' + x.split(' ')[1] for x in extra_swings.attack]
+
+    extra_swings.time = duration + 0.1
+
+    extra_swings = extra_swings[extra_swings.dmg > 0]
+
+    return extra_swings
+
 #@title Sim Pet Damage
 def sim_pet(duration):
 
@@ -761,10 +827,21 @@ def sim_pet(duration):
     pet_hits = pd.DataFrame(pet_hits, index = np.arange(0,len(pet_hits)), columns = ['time','attack','dmg'])
 
     focus_rate = 5 # per second
-    bm_rune_focus_mod = 1.5
 
     if hand_runes == 'beast master':
-      focus_rate *= bm_rune_focus_mod
+      bm_rune_focus_mod = 0.5
+    else:
+      bm_rune_focus_mod = 0
+
+    try:
+      if hunter['spec']['bm'][13] != 0:
+        bm_talent_focus_mod += int(hunter['spec']['bm'][13]) * 0.1
+      else:
+        bm_talent_focus_mod = 0
+    except:
+      bm_talent_focus_mod = 0
+
+    focus_rate *= (1 + bm_rune_focus_mod + bm_talent_focus_mod)
 
     if pet['type'] == 'ws':
         opening_gcd = np.floor(100 / pet_info['cost'])
@@ -856,7 +933,31 @@ def sim_pet(duration):
       pet_casts.dmg = pet_casts.dmg * 1.05
       pet_hits.dmg = pet_hits.dmg * 1.05
 
-    return pet_hits, pet_casts
+    try:
+      if hunter['spec']['bm'][15] != 0:
+
+        n_bestial_wrath = 1 + np.floor(duration / 120)
+        bestial_wrath_activations = [x * 120 for x in np.arange(n_bestial_wrath)]
+
+        for t in bestial_wrath_activations:
+          pet_casts.dmg = [y * 1.5 if t <= x <= t + 18 else y for x,y in zip(pet_casts.time, pet_casts.dmg)]
+          pet_hits.dmg = [y * 1.5 if t <= x <= t + 18 else y for x,y in zip(pet_hits.time, pet_hits.dmg)]
+          hunter['mana'] = hunter['mana'] - (hunter['base_mana'] * 0.12)
+
+    except:
+      pass
+
+    pet_log = pd.concat([pet_hits, pet_casts]).sort_values(['time', 'attack'],ascending = [True, True]).reset_index(drop=True)
+
+    try:
+      if hunter['spec']['bm'][14] != 0:
+        extra_swings = sim_frenzy(pet_log)
+        pet_log = pd.concat([pet_log, extra_swings]).sort_values(['time', 'attack'],ascending = [True, True]).reset_index(drop=True)
+
+    except:
+      pass
+
+    return pet_log
 
 #@title Sim Encounter
 def sim_fight(duration, coh):
@@ -869,7 +970,45 @@ def sim_fight(duration, coh):
 
     combat_log = combat_log.sort_values(['time', 'attack'],ascending = [True, True]).reset_index(drop=True)
 
-    log = pd.DataFrame({'time':-1.0,'attack':'start','dmg':0.0,'cost':0}, index = [0])
+    immo_dmg = 105
+    try:
+      if hunter['spec']['sv'][6] != 0:
+        immo_dmg = immo_dmg * (1 + (hunter['spec']['sv'][6] * 0.15))
+    except:
+      pass
+
+    if engi_wid != None:
+
+      n_engi = 1 + np.floor(duration / 60)
+      engi_casts = [x * 60 for x in np.arange(n_engi)]
+
+      casts = []
+
+      for t in engi_casts:
+
+        if t == 0:
+          t = -4.0
+
+        engi_explo = np.random.randint(128,173)
+        msg = 'heavy dynamite'
+
+        explo_crit_roll = np.random.randint(0,1001)
+        if explo_crit_roll <= 50:
+          engi_explo *= 2
+          msg = 'heavy dynamite crit'
+
+        casts += [{'time':t,'attack':msg,'dmg':engi_explo,'cost':0}]
+
+      casts += [{'time':-1.0,'attack':'immo trap','dmg':immo_dmg,'cost':50}]
+      casts += [{'time':-2.0,'attack':'serpent sting','dmg':105,'cost':50}]
+      casts += [{'time':-3.5,'attack':'multi-shot','dmg':120,'cost':100}]
+
+      log = pd.DataFrame(casts, index = np.arange(len(casts)))
+
+    else:
+      log = pd.DataFrame([{'time':-1.0,'attack':'immo trap','dmg':immo_dmg,'cost':50},
+                          {'time':-2.0,'attack':'serpent sting','dmg':105,'cost':50},
+                          {'time':-3.5,'attack':'multi-shot','dmg':120,'cost':100}], index = [0])
 
     fs_cost = combat_log[(combat_log.attack.str.contains('fs')) & (~combat_log.attack.str.contains('pet'))].attack.drop_duplicates().to_list()
     fs_cost = [{'attack': x, 'cost': 9} for x in fs_cost]
@@ -944,10 +1083,13 @@ def sim_fight(duration, coh):
     if chest_runes != 'lone wolf':
       combat_log.dmg = combat_log.dmg*dmg_mods
 
-    pet_hits, pet_casts = sim_pet(duration)
-    if (len(pet_hits) > 0) and (chest_runes != 'lone wolf'):
-        combat_log = pd.concat([pet_hits, pet_casts, combat_log]).fillna(0.0)
+    pet_log = sim_pet(duration)
+
+    if (len(pet_log) > 0) and (chest_runes != 'lone wolf'):
+
+        combat_log = pd.concat([pet_log, combat_log]).fillna(0.0)
         combat_log = combat_log.sort_values(['time', 'attack'],ascending = [True, True]).reset_index(drop=True)
+
     elif chest_runes == 'lone wolf':
       combat_log.dmg = combat_log.dmg*(dmg_mods+0.15)
       combat_log = combat_log[~combat_log.attack.str.contains('pet')]
@@ -1011,7 +1153,7 @@ def report(trials):
   plt.show()
 
   print('\n\n\nsummary over all iterations:')
-  display(results)
+  display(results.reset_index(drop=True))
 
   print('\n\n\nrandom iteration:')
   random_trial = trials[0][1]
@@ -1078,6 +1220,7 @@ def run_sim():
     coh = [wep_proc_wid1, None]
 
   return sim_fight(duration, coh = coh)
+
 
 ########################################################
       #### Above code from flori's notebook ####
@@ -1150,83 +1293,82 @@ st.write('Please report any bugs to discord: @zzenn777')
 # Add Text Section for User Instructions
 st.header("Instructions:", divider=True)
 st.markdown("""
-    Latest Version: Jan 26 2024
+    # Latest Version: Jan 27 2024
+- added full talent trees
+- added character level
+- added races
+- added heavy dynamite
+- added prepull (immolation trap > dynamite > sting > multi)
+- adjusted damage formulas
 
-    updated intro with new instructions (no hawk or lion when entering stats)
-    added pet ap scaling (0.22 of hunter rap)
-    added lion rune (do not have lion on when entering stats scaling happens in the back now)
-    added lone wolf rune
-    added master marksman rune (and option for second hunter with lion)
-    optimized rotation to back off wc a little bit more
-    added flanking strike resets
-    added stacking to flanking strike buff
-    added pet dmg range scaling
-    added carve rune
-    adjusted pet cast dmg formulas
-    added ranged attack power slider for crossbow users
+## Previous Update: Jan 26 2024
+- updated intro with new instructions (no hawk or lion when entering stats)
+- added pet ap scaling (0.22 of hunter rap)
+- added lion rune (do not have lion on when entering stats scaling happens in the back now)
+- added lone wolf rune
+- added master marksman rune (and option for second hunter with lion)
+- optimized rotation to back off wc a little bit more
+- added flanking strike resets
+- added stacking to flanking strike buff
+- added pet dmg range scaling
+- added carve rune
+- adjusted pet cast dmg formulas
+- added ranged attack power slider for crossbow users
 
-How to Use This Sim:
+#How to Use This Sim:
+- Enter your stats:
+  - Weapon stats come from the item tooltip NOT the character panel
+  - To sim 2h, set all the offhand options to 0 and/or select 'Twohand' (both work)
+  - Character and pet stats come from the character panel
+  - TURN OFF HAWK AND LION WHEN ENTERING STATS
+  - Extra stats come from item tooltips (i.e. hit/ap on crafting items, weps, trinkets, tier bonuses)
+- Set encounter info:
+  - Select runes
+  - Enter talents using wowhead sod calc url. Default is level 25 bm: https://www.wowhead.com/classic/talent-calc/hunter/05003200501
+  - Duration is encounter length in seconds
+  - Iterations is number of simulations to run (use 3k+ for settings similar to wowsims)
+- Set additional options:
+  - Weapon enchants (wep dmg)
+  - Consumes (mana potion, minor recombobulator, offhand stone, elixirs, pet scrolls)
+  - Catfury
+  - Raid buffs (shout, might,  mark, int)
+  - World buffs (dmf, bfd, ashen)
+- You do not need to reload the options this will actually reset them
+- You do want to reload the sim by hitting the play button in the last cell to clear any old results and load new options
+- Run sim by hitting 'Melee Dream'
+            
+###Things This Sim Is Good At:
+- Comparing gear options
+- Comparing talent options
+- Comparing rune options
+- Comparing dps without optimal setups (wep enchants, buffs, wf)
 
-    Enter your stats:
-        Weapon stats come from the item tooltip NOT the character panel
-        To sim 2h, set all the offhand options to 0 and select 'Twohand'
-        Character and pet stats come from the character panel
-        TURN OFF HAWK AND LION WHEN ENTERING STATS
-        Extra stats come from item tooltips (i.e. hit/ap on crafting items,weps,trinkets,tier bonuses)
-    Set encounter info:
-        Rune setup is assumed to be melee bis (lion, bm, flanking)
-        Enter talents using wowhead sod calc url. Default is bm: https://www.wowhead.com/classic/talent-calc/hunter/05003200501
-        Duration is encounter length in seconds
-        Iterations is number of simulations to run (use 3k+ for settings similar to wowsims)
-    Set additional options:
-        Enchants (wep dmg)
-        Consumes (mana potion, minor recombobulator, offhand stone, elixirs, pet scrolls)
-        Catfury
-        Raid buffs (shout, might, mark, int)
-        World buffs (dmf, bfd, ashen)
-    You do not need to reload the options this will actually reset them
-    You do want to reload the sim by hitting the play button in the last cell to clear any old results and load new options
-    Run sim by hitting 'Melee Dream'
+###Things This Sim Is Not Good At:
+- Getting 100 percent accurate raid dps numbers (sims are for comps and i am not implementing boss armor/resist)
+- Very long fight lengths (>120s, on longer fights fishing and mana regen are more important -- all fights in bfd are under 2 min)
 
-Things This Sim Is Good At:
+###Things I Won't Implement:
+- Save Features
 
-    Comparing gear options
-    Comparing talent options
-    Comparing rune options
-    Comparing dps without optimal setups (enchants, buffs, wf)
-    Comparing SV vs BM on SHORT fights (<45s, where flanking reset is less likely)
+###Things I'm Working On (In No Order):
+- Adjusting damage formulas
+- Sixtyupgrades character sheet urls
+- Wowhead weapon urls
 
-Things This Sim Is Not Good At:
-
-    Getting 100 percent accurate raid dps numbers (sims are for comps and i am not implementing boss armor/resist)
-    Very long fight lengths (>120s, on longer fights fishing and mana regen are more important -- all fights in bfd are under 2 min)
-
-Things I Won't Implement:
-
-    Equipment Database
-    Save Features
-    All Weapon Procs/Pets/Items/Runes/Etc.
-
-Things I'm Working On (In No Order):
-
-    Full Talent Trees
-
-Known Bugs:
-
-    None
-
+###Known Bugs:
+- engineering set to: None
 """)
 
 st.header('Hunter specs', divider=True)
 
-race_wid = st.selectbox('race:', ['other', 'orc', 'troll'], index=0)
-
 col1, col2 = st.columns(2)
 with col1:
+    level = st.number_input('level:', min_value=0, max_value=60, value=25, step=1)
     strength = st.number_input('strength:', min_value=0, value=53, step=1)
     intel = st.number_input('intelligence:', min_value=0, value=500, step=1)
 
 with col2:
+    race_wid = st.selectbox('race:', ['night elf','dwarf','tauren','orc','troll'], index=0)
     agi = st.number_input('agility:', min_value=0, value=175, step=1)
     spirit = st.number_input('spirit:', min_value=0, value=500, step=1)
 
@@ -1254,6 +1396,7 @@ with col2:
     ex_rap = st.number_input('extra rap:', min_value=0, value=0, step=1)
 with col3:
   glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=0)
+  engi_wid = st.selectbox('engineering:', ['heavy dynamite'], index=0)
 
 st.header('Weapon specs', divider=True)
 
