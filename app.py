@@ -1008,7 +1008,7 @@ def sim_fight(duration, coh):
     else:
       log = pd.DataFrame([{'time':-1.0,'attack':'immo trap','dmg':immo_dmg,'cost':50},
                           {'time':-2.0,'attack':'serpent sting','dmg':105,'cost':50},
-                          {'time':-3.5,'attack':'multi-shot','dmg':120,'cost':100}], index = [0])
+                          {'time':-3.5,'attack':'multi-shot','dmg':120,'cost':100}], index = [0,1,2])
 
     fs_cost = combat_log[(combat_log.attack.str.contains('fs')) & (~combat_log.attack.str.contains('pet'))].attack.drop_duplicates().to_list()
     fs_cost = [{'attack': x, 'cost': 9} for x in fs_cost]
@@ -1356,7 +1356,7 @@ st.markdown("""
 - Wowhead weapon urls
 
 ###Known Bugs:
-- engineering set to: None
+- None
 """)
 
 st.header('Hunter specs', divider=True)
@@ -1396,7 +1396,7 @@ with col2:
     ex_rap = st.number_input('extra rap:', min_value=0, value=0, step=1)
 with col3:
   glove_wid = st.selectbox('gloves:', ['haste gloves', 'red whelp gloves', None], index=0)
-  engi_wid = st.selectbox('engineering:', ['heavy dynamite'], index=0)
+  engi_wid = st.selectbox('engineering:', ['heavy dynamite', None], index=0)
 
 st.header('Weapon specs', divider=True)
 
