@@ -2,4 +2,4 @@ streamlit
 pandas
 numpy
 matplotlib
-bs4
+beautifulsoup4
