@@ -3,5 +3,4 @@ pandas
 numpy
 matplotlib
 requests
-lxml
-beautifulsoup4
+beautifulsoup4==4.12.2
