@@ -6,6 +6,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+import requests
+from bs4 import BeautifulSoup
+import re
+import ast
 
 
 # Ignore all warnings
@@ -22,21 +26,42 @@ if 'prev_sims' not in st.session_state:
       #### Below code from flori's notebook ####
 ########################################################
 
+def scrape(URL,string='',class_type='',link_type=''):
+
+  if link_type == '':
+    headers = requests.utils.default_headers()
+    headers.update({
+        'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0',})
+    page = requests.get(URL, headers=headers).content
+    soup = BeautifulSoup(page, "html.parser")
+  else:
+    with open(URL) as fp:
+      soup = BeautifulSoup(fp, 'html.parser')
+
+  if class_type != '':
+    if (class_type == 'div') or ( class_type == 'a'):
+      results = soup.find_all(class_type, {"class": string})
+    else:
+      results = soup.find_all(class_=re.compile(string))
+    return results
+  else:
+    return soup
+
 #@title Hunter Setup
-def make_hunter(weapons, attributes):
+def make_hunter():
 
     hunter = {}
+    attributes = {'spec':spec}
 
-    # attributes
-    hunter['str'] = attributes['str']
-    hunter['agi'] = attributes['agi']
-    hunter['spirit'] = attributes['spirit']
-    hunter['int'] = attributes['int']
-    hunter['base_mana'] = hunter['int'] * 15
+    if gear_wid != 'None':
+      loadout = export['stats']
 
-    race_agi_bonuses = {'tauren':0,'dwarf':1,'orc':2,'troll':7,'night elf':8}
-    hunter['agi'] = hunter['agi'] - 8 # normalize racial bonuses to prevent double dipping from selector
-    hunter['agi'] = hunter['agi'] + race_agi_bonuses[race_wid]
+      hunter['str'] = loadout['strength']
+      hunter['agi'] = loadout['agility']
+      hunter['spirit'] = loadout['spirit']
+      hunter['int'] = loadout['intellect']
+      hunter['mana'] = loadout['mana']
+
 
     if raid_buffs2['druid'] == True:
       hunter['str'] = hunter['str'] + 8
@@ -72,7 +97,12 @@ def make_hunter(weapons, attributes):
       talents['sv'] = [0]
 
     hunter['spec'] = talents
-    hunter['hit'] = attributes['hit']
+
+    if gear_wid != 'None':
+      try:
+        hunter['hit'] =  loadout['hit']
+      except:
+        hunter['hit'] = 0
 
     try:
       if hunter['spec']['sv'][10] != 0:
@@ -80,33 +110,40 @@ def make_hunter(weapons, attributes):
     except:
       pass
 
-    # weapon
-    hunter['spd'] = weapons['spd']
+    if gear_wid != 'None':
+      armor = pd.DataFrame(export['items'])
+      weapons = {}
 
+      mh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'MAIN_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
+      mh_range = (int(mh_range[1].split(':')[1]), int(mh_range[0]))
 
-    if (enchant_wid == True):
+      mh_mod = 0
+      oh_mod = 0
 
-      if (twoh_wid == True) | (weapons['spd'][1] == 0):
-        hunter['wep'] = ((weapons['dmg'][0][0] + 5, 0), (weapons['dmg'][1][0] + 5, 0))
+      if enchant_wid == True:
+        mh_mod += 3
+        oh_mod += 3
 
-      else:
+      if oh_stone == True:
+        oh_mod += 8
 
-        if oh_stone == False:
-          hunter['wep'] = ((weapons['dmg'][0][0] + 3, weapons['dmg'][0][1] + 3), (weapons['dmg'][1][0] + 3, weapons['dmg'][1][1] + 3))
-        else:
-          hunter['wep'] = ((weapons['dmg'][0][0] + 3, weapons['dmg'][0][1] + 11), (weapons['dmg'][1][0] + 3, weapons['dmg'][1][1] + 11))
+      try:
+        hunter['spd'] = (export['stats']['mainHandSpeed'], export['stats']['offHandSpeed'])
+        twoh_wid = False
 
-    else:
+        oh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'OFF_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
+        oh_range = (int(oh_range[1].split(':')[1]), int(oh_range[0]))
 
-      if (twoh_wid == True) | (weapons['spd'][1] == 0):
-        hunter['wep'] = weapons['dmg']
+        weapons['dmg'] = ((mh_range[0] + mh_mod, oh_range[0] + oh_mod),(mh_range[1] + mh_mod, oh_range[1] + oh_mod))
 
-      else:
+      except:
+        hunter['spd'] = (export['stats']['mainHandSpeed'], 0)
+        twoh_wid = True
 
-        if oh_stone == False:
-          hunter['wep'] = weapons['dmg']
-        else:
-          hunter['wep'] = ((weapons['dmg'][0][0], weapons['dmg'][0][1] + 8), (weapons['dmg'][1][0], weapons['dmg'][1][1] + 8))
+        weapons['dmg'] = ((mh_range[0] + mh_mod, 0),(mh_range[1] + mh_mod, 0))
+
+      weapons['spd'] = hunter['spd']
+      hunter['wep'] = weapons['dmg']
 
     if agi_elixir == True:
       hunter['agi'] = hunter['agi'] + 25
@@ -152,18 +189,16 @@ def make_hunter(weapons, attributes):
 
     hunter['agi'] *= agi_lion_buff
 
-    # dont know new base stats at 40 yet
-    hunter['mana'] = ((attributes['int'] - 34) * 15) + 1000
 
     if mana_pot == True:
       hunter['mana'] = hunter['mana'] + np.random.randint(700,901)
 
-      if hunter['spd'][1] != 0:
-        hunter['hit'] = hunter['hit'] + 2
-
     # melee stats
-    hunter['crit'] = (hunter['agi'] - 160 + 0.8 * 200) * 0.052
-    hunter['ap'] = (level * 2) + hunter['str'] + hunter['agi'] - 20 + ex_ap
+    if gear_wid != 'None':
+      hunter['crit'] = loadout['rangedCrit'] - 2 # crit suppression 1% per level diff
+
+    if gear_wid != 'None':
+      hunter['ap'] = loadout['attackPower']
 
     #if world_buffs['gnomer'] == True:
     #  hunter['spd'] = (hunter['spd'][0] / 1.2, hunter['spd'][1] / 1.2)
@@ -182,7 +217,8 @@ def make_hunter(weapons, attributes):
       orc_bonus = (base_ap * 0.25) * 15 / duration # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
       hunter['ap'] = hunter['ap'] + orc_bonus
 
-    hunter['rap'] = (2 * hunter['agi']) + (level * 2) - 10 + ex_ap + ex_rap + 70
+    if gear_wid != 'None':
+      hunter['rap'] = loadout['rangedAttackPower']
 
     if raid_buffs2['hunterap'] == True:
       hunter['ap'] = hunter['ap'] + 50
@@ -196,8 +232,6 @@ def make_hunter(weapons, attributes):
         hunter['crit'] += int(hunter['spec']['sv'][12])
     except:
       pass
-
-    hunter['crit'] = hunter['crit'] + ex_crit - 2 # crit suppression 1% per level diff
 
     if raid_buffs3['feralcrit'] == True:
       hunter['crit'] = hunter['crit'] + 3
@@ -279,7 +313,7 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
 
     if pet == True:
 
-      crit = 5
+      crit = 5 + hunter['crit']
 
       if raid_buffs3['feralcrit'] == True:
         crit += 3
@@ -304,29 +338,29 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
       except:
         pass
 
-    if (mh_race_wep_wid == True) and (twoh_wid == True):
+    if (mh_race_wep_wid >= 5) and (twoh_wid == True):
       miss_upper = np.max(50 - hit * 10,0)
-    elif (mh_race_wep_wid == False) and (twoh_wid == True):
+    elif (mh_race_wep_wid < 5) and (twoh_wid == True):
       miss_upper = np.max(60 - hit * 10,0)
-    elif (mh_race_wep_wid == True) and (mh == True):
+    elif (mh_race_wep_wid >= 5) and (mh == True):
       miss_upper = np.max(240 - hit * 10,0)
-    elif (mh_race_wep_wid == False) and (mh == True):
+    elif (mh_race_wep_wid < 5) and (mh == True):
       miss_upper = np.max(250 - hit * 10,0)
-    elif (oh_race_wep_wid == True) and (mh == False):
+    elif (oh_race_wep_wid >= 5) and (mh == False):
       miss_upper = np.max(240 - hit * 10,0)
-    elif (oh_race_wep_wid == False) and (mh == False):
+    elif (oh_race_wep_wid < 5) and (mh == False):
       miss_upper = np.max(250 - hit * 10,0)
 
     miss = (0, miss_upper) # 6% 2h and 25% dw base for +2 levels and no wep skill
 
-    if (mh_race_wep_wid == True) and ((twoh_wid == True) | (mh == True)):
+    if (mh_race_wep_wid >= 5) and ((twoh_wid == True) | (mh == True)):
       base = 55 # 5.5% base
-    elif (mh_race_wep_wid == False) and ((twoh_wid == True) | (mh == True)):
+    elif (mh_race_wep_wid < 5) and ((twoh_wid == True) | (mh == True)):
       base = 60 # 6% base
 
-    if (oh_race_wep_wid == True) and (twoh_wid == False) and (mh == False):
+    if (oh_race_wep_wid >= 5) and (twoh_wid == False) and (mh == False):
       base = 55 # 5.5% base
-    elif (oh_race_wep_wid == False) and (twoh_wid == False) and (mh == False):
+    elif (oh_race_wep_wid < 5) and (twoh_wid == False) and (mh == False):
       base = 60 # 6% base
 
     dodge = (miss_upper + 1, miss_upper+(base - 1))
@@ -396,14 +430,14 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
     if ((wep_proc_wid1 == 'shadowfang') and (mh == True)):
         dmg = dmg + np.random.randint(4,9)
 
-    if (mh_race_wep_wid == True) and ((twoh_wid == True) | (mh == True)):
+    if (mh_race_wep_wid >= 5) and ((twoh_wid == True) | (mh == True)):
       gb_penalty = 0.95
-    elif (mh_race_wep_wid == False) and ((twoh_wid == True) | (mh == True)):
+    elif (mh_race_wep_wid < 5) and ((twoh_wid == True) | (mh == True)):
       gb_penalty = 0.85 # 30% base at 15% reduced dmg
 
-    if (oh_race_wep_wid == True) and (twoh_wid == False) and (mh == False):
+    if (oh_race_wep_wid >= 5) and (twoh_wid == False) and (mh == False):
       gb_penalty = 0.95
-    elif (oh_race_wep_wid == False) and (twoh_wid == False) and (mh == False):
+    elif (oh_race_wep_wid < 5) and (twoh_wid == False) and (mh == False):
       gb_penalty = 0.85
 
     hand = {True: 'mh', False: 'oh'}
@@ -824,15 +858,16 @@ def sim_priority_rotation(duration):
       continue
 
     # trap
-    if (trap['state'] == 'ready') and (globals - gcd >= (15/1.5)):
+    if trap_wid == 'max immolation trap':
+      if (trap['state'] == 'ready') and (globals - gcd >= (15/1.5)):
 
-      dmg = prepull()
-      dmg = dmg[dmg.attack == 'immo trap']
-      events += [(gcd*1.5, dmg['attack'].iloc[0], dmg['dmg'].iloc[0])]
+        dmg = prepull()
+        dmg = dmg[dmg.attack == 'immo trap']
+        events += [(gcd*1.5, dmg['attack'].iloc[0], dmg['dmg'].iloc[0])]
 
-      trap['state'] = 'down'
-      trap['cd'] = gcd + cooldown['trap']
-      continue
+        trap['state'] = 'down'
+        trap['cd'] = gcd + cooldown['trap']
+        continue
 
     # raptor
     if raptor['state'] == 'ready':
@@ -1102,6 +1137,7 @@ def sim_pet(duration):
           cast_dmg = (np.random.randint(pet_info['dmg'][0],pet_info['dmg'][1] + 1) + ws_sp_scaling) * pet_info['mod'] * spec_mod * bm_rune_mod
 
           crit_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
+
           if 'crit' in crit_roll[0]:
             cast_dmg *= 2
             msg = 'pet cast crit'
@@ -1269,7 +1305,7 @@ def prepull():
   except:
     pass
 
-  if engi_wid != None:
+  if engi_wid != 'None':
 
     n_engi = 1 + np.floor(duration / 60)
     engi_casts = [x * 60 for x in np.arange(n_engi)]
@@ -1458,34 +1494,27 @@ def report(trials):
 
   return None
 
+def get_dps(trials):
+
+  results = pd.concat([x[1] for x in trials]).drop(['avg_hit'],axis = 1)
+  results_sum = results[['attack','dmg','count']].groupby('attack').sum()
+  results_min = results[['attack','min_hit']].groupby('attack').min()
+  results_max = results[['attack','max_hit']].groupby('attack').max()
+
+  results = results_sum.join(results_min).join(results_max)
+  results['avg_hit'] = (results['dmg'] / results['count']).astype(int)
+  results['expected_casts'] = (results['count'] / iter).round(2)
+  results['expected_dmg'] = (results['dmg'] / iter).astype(int)
+
+  results = results.reset_index()
+
+  dps = np.max([(x[1].dmg.sum()/duration).round(1) for x in trials])
+
+  return dps
+
 #@title Sim Orchestration
 
 def run_sim():
-
-  global duration
-  duration = duration_wid
-  iterations = iter
-
-  if twoh_wid == False:
-    weapons = {'dmg': ((mh_range[0],oh_range[0]),(mh_range[1],oh_range[1])),
-               'spd': (wep_spd1,wep_spd2)}
-
-  else:
-    weapons = {'dmg': ((mh_range[0],0),(mh_range[1],0)),
-               'spd': (wep_spd1,0)}
-
-  attributes = {'str': strength,
-                'agi': agi,
-                'int': intel,
-                'spirit': spirit,
-                'hit': ex_hit,
-                'spec':spec}
-
-  hunter = make_hunter(weapons, attributes)
-  globals()['hunter'] = hunter
-
-  pet = make_pet()
-  globals()['pet'] = pet
 
   if (wep_proc_wid1 == 'None') and (wep_proc_wid2 == 'None'):
     coh = None
@@ -1568,35 +1597,26 @@ st.write('Please report any bugs to discord: @zzenn777')
 # Add Text Section for User Instructions
 st.header("Instructions:", divider=True)
 st.markdown("""
-# Latest Version: Feb 1 2024
-- sim updated to P2
-- added monke
+# Latest Version: Feb 3 2024
+- swapped gear options for 60upgrades export string (RESET ALL TALENTS AND BUFFS BEFORE EXPORT)
+- added pet crit scaling
+- optimized to improve iterations/sec
 
-## How to Use This Sim:
-- Go to the top left File menu and make a copy of this notebook in drive
-- If you copy multiple notebooks you can have multiple sims for comparisons
-- Go to the top right and attach a runtime
-- Go to the top left Runtime menu and select 'Run all' to load the notebook
-- Enter your stats:
-  - Weapon stats come from the item tooltip NOT the character panel
-  - To sim 2h, set all the offhand options to 0 and/or select 'Twohand' (both work)
-  - Character and pet stats come from the character panel
-  - TURN OFF HAWK AND LION WHEN ENTERING STATS
-  - Extra stats come from item tooltips (i.e. hit/ap on crafting items, weps, trinkets, tier bonuses)
+# How to Use This Sim:
 - Set encounter info:
   - Select runes
   - Enter talents using wowhead sod calc url. Default is deep sv
   - Duration is encounter length in seconds
   - Iterations is number of simulations to run (use 3k+ for settings similar to wowsims)
 - Set additional options:
-  - Weapon enchants (wep dmg)
-  - Consumes (mana potion, minor recombobulator, offhand stone, elixirs, pet scrolls)
-  - Catfury
-  - Raid buffs (shout, might,  mark, int)
-  - World buffs (dmf, bfd, ashen)
-- You do not need to reload the options this will actually reset them
-- You do want to reload the sim by hitting the play button in the last cell to clear any old results and load new options
-- Run sim by hitting 'Melee Dream'
+  - Weapon enchants
+  - Consumes
+  - Windfurry
+  - Raid buffs
+  - World buffs
+
+- Run sim
+
 
 ### Things This Sim Is Good At:
 - Comparing gear options
@@ -1620,18 +1640,16 @@ st.markdown("""
 - None
 """)
 
-st.header('Hunter specs', divider=True)
+st.header('Hunter', divider=True)
+race_wid = st.selectbox('race:', ['night elf','dwarf','tauren','orc','troll'], index=0)
 
-col1, col2 = st.columns(2)
-with col1:
-    level = st.number_input('level:', min_value=0, max_value=60, value=40, step=1)
-    strength = st.number_input('strength:', min_value=0, value=53, step=1)
-    intel = st.number_input('intelligence:', min_value=0, value=40, step=1)
+st.subheader('Hunter gear', divider=True)
 
-with col2:
-    race_wid = st.selectbox('race:', ['night elf','dwarf','tauren','orc','troll'], index=0)
-    agi = st.number_input('agility:', min_value=0, value=175, step=1)
-    spirit = st.number_input('spirit:', min_value=0, value=40, step=1)
+default_gear = """{     "name": "Theoretical BIS",     "phase": 2,     "links": {         "set": "https://sixtyupgrades.com/sod/set/tRbrjX54ynx6nZcqTviXGc",         "talents": "https://sixtyupgrades.com/sod/talents/hunter/2BAEddGhhLKMJOIN"     },     "character": {         "name": "Kawney",         "level": 40,         "gameClass": "HUNTER",         "race": "NIGHTELF",         "faction": "ALLIANCE"     },     "items": [         {             "name": "Glowing Gneuro-Linked Cowl",             "id": 215166,             "slot": "HEAD"         },         {             "name": "Gnomeregan Peace Officer's Torque",             "id": 213344,             "slot": "NECK"         },         {             "name": "Troggslayer Pauldrons",             "id": 213304,             "slot": "SHOULDERS"         },         {             "name": "Insulated Chestguard",             "id": 213313,             "enchant": {                 "name": "Enchant Chest - Lesser Stats",                 "id": 866,                 "spellId": 13700             },             "slot": "CHEST"         },         {             "name": "Darkvision Girdle",             "id": 213325,             "slot": "WAIST"         },         {             "name": "Insulated Legguards",             "id": 213332,             "slot": "LEGS"         },         {             "name": "Blackforge Greaves",             "id": 6423,             "enchant": {                 "name": "Enchant Boots - Lesser Agility",                 "id": 849,                 "spellId": 13637             },             "slot": "FEET"         },         {             "name": "Forest Stalker's Bracers",             "id": 19590,             "enchant": {                 "name": "Enchant Bracer - Strength",                 "id": 856,                 "spellId": 13661             },             "slot": "WRISTS"         },         {             "name": "Machinist's Gloves",             "id": 213319,             "enchant": {                 "name": "Enchant Gloves - Agility",                 "id": 904,                 "spellId": 13815             },             "slot": "HANDS"         },         {             "name": "Hypercharged Gear of Devastation",             "id": 213284,             "slot": "FINGER_1"         },         {             "name": "Protector's Band",             "id": 19515,             "slot": "FINGER_2"         },         {             "name": "Avenger's Void Pearl",             "id": 211449,             "slot": "TRINKET_1"         },         {             "name": "Gyromatic Experiment 420b",             "id": 213348,             "slot": "TRINKET_2"         },         {             "name": "Dark Hooded Cape",             "id": 5257,             "enchant": {                 "name": "Enchant Cloak - Lesser Agility",                 "id": 849,                 "spellId": 13882             },             "slot": "BACK"         },         {             "name": "Mekkatorque's Arcano-Shredder",             "id": 213409,             "enchant": {                 "name": "Enchant Weapon - Striking",                 "id": 943,                 "spellId": 13693             },             "slot": "MAIN_HAND"         },         {             "name": "Cogmaster's Claw",             "id": 213442,             "enchant": {                 "name": "Enchant Weapon - Striking",                 "id": 943,                 "spellId": 13693             },             "slot": "OFF_HAND"         },         {             "name": "Bloodlash Bow",             "id": 216516,             "slot": "RANGED"         }     ],     "consumables": [],     "buffs": [],     "talents": [         {             "name": "Humanoid Slaying",             "id": 1301,             "rank": 3,             "spellId": 19153         },         {             "name": "Lightning Reflexes",             "id": 1303,             "rank": 5,             "spellId": 24297         },         {             "name": "Entrapment",             "id": 1304,             "rank": 2,             "spellId": 19387         },         {             "name": "Clever Traps",             "id": 1306,             "rank": 2,             "spellId": 19245         },         {             "name": "Deterrence",             "id": 1308,             "rank": 1,             "spellId": 19263         },         {             "name": "Improved Feign Death",             "id": 1309,             "rank": 2,             "spellId": 19287         },         {             "name": "Surefooted",             "id": 1310,             "rank": 3,             "spellId": 24283         },         {             "name": "Counterattack",             "id": 1312,             "rank": 1,             "spellId": 19306         },         {             "name": "Killer Instinct",             "id": 1321,             "rank": 3,             "spellId": 19373         },         {             "name": "Trap Mastery",             "id": 1322,             "rank": 2,             "spellId": 19377         },         {             "name": "Savage Strikes",             "id": 1621,             "rank": 2,             "spellId": 19160         },         {             "name": "Survivalist",             "id": 1622,             "rank": 2,             "spellId": 19256         },         {             "name": "Monster Slaying",             "id": 1623,             "rank": 3,             "spellId": 24295         }     ],     "points": [         {             "name": "Survival Hunter EP (P2)",             "stats": {                 "attackPower": 1,                 "strength": 1.2,                 "agility": 2,                 "crit": 28.57,                 "hit": 21.98,                 "dps": 14,                 "speed": 100             }         },         {             "name": "P2 Melee Hunter - No Lions",             "stats": {                 "attackPower": 1,                 "strength": 1.1,                 "agility": 2.19,                 "crit": 28.57,                 "hit": 21.98,                 "dps": 14,                 "speed": 100             }         }     ],     "stats": {         "agility": 242,         "arcaneResist": 5,         "armor": 1558,         "attackPower": 539,         "crit": 10.15,         "defense": 200,         "dodge": 15.67,         "frostResist": 10,         "health": 1920,         "hit": 7,         "intellect": 57,         "mainHandSpeed": 2.6,         "mana": 1680,         "mechanicalAttackPower": 30,         "natureResist": 15,         "offHandSpeed": 2.8,         "parry": 5,         "rangedAttackPower": 652,         "rangedCrit": 10.15,         "rangedHit": 7,         "rangedSpeed": 1.8,         "shadowResist": 10,         "spellCrit": 5.97,         "spellHit": 4,         "spirit": 51,         "stamina": 136,         "strength": 139     },     "exportOptions": {         "buffs": true,         "talents": true     } }"""
+gear_wid = st.text_input('Sixty Upgrades Export String:', default_gear)
+st.markdown("[Sixty upgrade url](https://sixtyupgrades.com/sod/)")
+
+st.subheader('Hunter talents', divider=True)
 
 spec = st.text_input('Input talents url from wowhead:', 'https://www.wowhead.com/classic/talent-calc/hunter/--330220221232315')
 st.markdown("[Wowhead hunter talents url](https://www.wowhead.com/classic/talent-calc/hunter)")
@@ -1650,43 +1668,23 @@ with col2:
 with col3:
     hand_runes = st.selectbox('Hand rune:', ['beast master', 'carve', None], index=1)
 
-st.subheader('Extra stats')
-col1, col2, col3 = st.columns(3)
-with col1:
-    ex_hit = st.number_input('extra hit percent:', min_value=0, value=1, step=1)
-    ex_crit = st.number_input('extra crit:', min_value=0, value=0, step=1)
-with col2:
-    ex_ap = st.number_input('extra ap:', min_value=0, value=54, step=1)
-    ex_rap = st.number_input('extra rap:', min_value=0, value=0, step=1)
-with col3:
-  lw_wid = st.selectbox('leather:', ['haste gloves','haste helm', None], index=1)
-  engi_wid = st.selectbox('engineering:', ['high-yield radiation bomb', None], index=0)
+st.subheader('Encounter options')
+lw_wid = st.selectbox('leather:', ['haste gloves','haste helm', None], index=1)
+engi_wid = st.selectbox('engineering:', ['high-yield radiation bomb', None], index=0)
+trap_wid = st.selectbox('rotation:', ['pre-pull immolation trap','max immolation trap'], index=0)
 
-st.header('Weapon specs', divider=True)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader('Main Hand (MH)')
-    wep_proc_wid1 = st.selectbox('mh proc:', ['shadowfang', 'talwar', 'meteor', 'hydra', 'fathom', 'bloodpike', 'duskbringer', 'grimclaw', "serra'kis", 'None'], index=9)
-    wep_spd1 = st.number_input('mh speed:', min_value=0.0, value=2.7, step=0.1)
-    mh_range = st.slider('mh dmg', 0, 200, (55, 104))
-
-with col2:
-    st.subheader('Off Hand (OH)')
-    wep_proc_wid2 = st.selectbox('oh proc:', ['gust', 'meteor', 'grimclaw', 'bootknife', "serra'kis", 'None'], index=5)
-    wep_spd2 = st.number_input('oh speed:', min_value=0.0, value=2.2, step=0.1)
-    oh_range = st.slider('oh dmg', 0, 200, (46, 86))
-
+st.header('Weapon options', divider=True)
 col1, col2 = st.columns(2)
 with col1:
-  mh_race_wep_wid = st.checkbox('mh +5 wep skill', value=False)
-  oh_race_wep_wid = st.checkbox('oh +5 wep skill', value=False)
-  twoh_wid = st.checkbox('twohand', value=False)
-
-with col2:
+  wep_proc_wid1 = st.selectbox('mh proc:', ['shadowfang', 'talwar', 'meteor', 'hydra', 'fathom', 'bloodpike', 'duskbringer', 'grimclaw', "serra'kis", 'None'], index=9)
+  wep_proc_wid2 = st.selectbox('oh proc:', ['gust', 'meteor', 'grimclaw', 'bootknife', "serra'kis", 'None'], index=5)
   same_type_wid = st.checkbox('same wep type', value=True)
   enchant_wid = st.checkbox('+wep dmg enchants', value=True)
+
+with col2:
+  mh_race_wep_wid = st.slider('mh +wep skill', min_value=0, step=1, value=0)
+  oh_race_wep_wid = st.slider('oh +wep skill', min_value=0, step=1, value=0)
+  twoh_wid = st.checkbox('twohand', value=False, disabled=True)
 
 st.header('Pet specs', divider=True)
 
@@ -1743,6 +1741,23 @@ iter = st.number_input('Number of iterations:', min_value=100, value=300, step=1
 
 if st.sidebar.button('Calculate DPS'):
     global trials
+    trials = []
+
+    global export
+    export = eval(gear_wid.replace('                 ','').replace('             ','').replace('         ','').replace('     ','').replace('false','False').replace('true','True'))
+
+    hunter = make_hunter()
+    globals()['hunter'] = hunter
+
+    global duration
+    duration = duration_wid
+
+    hunter = make_hunter()
+    globals()['hunter'] = hunter
+
+    pet = make_pet()
+    globals()['pet'] = pet
+
     trials = []
 
     progress_bar = st.sidebar.progress(0)
