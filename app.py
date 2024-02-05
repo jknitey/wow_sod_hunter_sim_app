@@ -14,9 +14,6 @@ import re
 # Ignore all warnings
 warnings.filterwarnings("ignore")
 
-hunter = {}
-pet = {}
-
 # Initialize session state
 if 'prev_sims' not in st.session_state:
     st.session_state.prev_sims = []
@@ -210,11 +207,6 @@ def make_hunter():
 
     if raid_buffs1['mage'] == True:
       hunter['mana'] = hunter['mana'] + (15 * 15)
-
-    if race_wid == 'orc':
-      base_ap =  hunter['str'] +  hunter['agi'] + (level * 2) - 20
-      orc_bonus = (base_ap * 0.25) * 15 / duration # ap is in units of dps so we can transform it to get orc bonus ap over the whole fight -- cleans up later calcs
-      hunter['ap'] = hunter['ap'] + orc_bonus
 
     if gear_wid != 'None':
       hunter['rap'] = loadout['rangedAttackPower']
@@ -476,7 +468,14 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
 #@title Sim Auto Attacks
 def sim_autos(duration):
 
+  global hunter
+
   n_mh = int(np.floor(duration / hunter['spd'][0]))
+
+  if race_wid == 'orc':
+    base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
+    hunter_ap = hunter['ap']
+    hunter['ap'] = hunter_ap + base_ap
 
   try:
       n_oh = int(np.floor(duration / hunter['spd'][1]))
@@ -501,6 +500,11 @@ def sim_autos(duration):
   mh_hits = []
   mh_time = 0
   for attack in np.arange(0,n_mh):
+
+      if race_wid == 'orc':
+        if mh_time >= 15:
+          hunter['ap'] = hunter_ap
+
       event = attack_table(roll = np.random.randint(0,1001), mh = True, hit = hunter['hit'])
       mh_hits += [(mh_time,) + event]
       mh_time += mh_speed
@@ -513,6 +517,12 @@ def sim_autos(duration):
 
   else:
 
+      if race_wid == 'orc':
+        base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
+        hunter_ap = hunter['ap']
+        hunter['ap'] = hunter_ap + base_ap
+
+
       oh_speed = hunter['spd'][1]
 
       oh_speed = oh_speed / bonus_haste
@@ -520,6 +530,11 @@ def sim_autos(duration):
       oh_hits = []
       oh_time = 0
       for attack in np.arange(0,n_oh):
+
+          if race_wid == 'orc':
+            if oh_time >= 15:
+              hunter['ap'] = hunter_ap
+
           event = attack_table(roll = np.random.randint(0,1001), mh = False, hit = hunter['hit'])
           oh_hits += [(oh_time,) + event]
           oh_time += oh_speed
@@ -788,6 +803,8 @@ def sim_flanking_buff(yellow):
 #@title Sim Priority Rotation
 def sim_priority_rotation(duration):
 
+  global hunter
+
   globals = np.floor(duration / 1.5)
 
   # define cds
@@ -811,7 +828,16 @@ def sim_priority_rotation(duration):
 
   events = []
 
+  if race_wid == 'orc':
+    base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
+    hunter_ap = hunter['ap']
+    hunter['ap'] = hunter_ap + base_ap
+
   for gcd in np.arange(0, globals):
+
+    if race_wid == 'orc':
+      if gcd * 1.5 >= 15:
+        hunter['ap'] = hunter_ap
 
     # check states
     if flanking_buff['cd'] <= gcd: flanking_buff['state'] = 'down'
@@ -1304,7 +1330,7 @@ def prepull():
   except:
     pass
 
-  if engi_wid != 'None':
+  if engi_wid == 'high-yield radiation bomb':
 
     n_engi = 1 + np.floor(duration / 60)
     engi_casts = [x * 60 for x in np.arange(n_engi)]
@@ -1323,6 +1349,34 @@ def prepull():
       if explo_crit_roll <= 50:
         engi_explo = ((engi_explo - 125) * 2) + 125
         msg = 'high-yield radiation bomb crit'
+
+      casts += [{'time':t,'attack':msg,'dmg':engi_explo,'cost':0}]
+
+    casts += [{'time':-1.0,'attack':'immo trap','dmg':immo_dmg,'cost':135}]
+    casts += [{'time':-2.0,'attack':'serpent sting','dmg':105,'cost':50}]
+    casts += [{'time':-3.5,'attack':'multi-shot','dmg':160,'cost':100}]
+
+    log = pd.DataFrame(casts, index = np.arange(len(casts)))
+
+  if engi_wid == 'ez-thro dynamite II':
+
+    n_engi = 1 + np.floor(duration / 60)
+    engi_casts = [x * 60 for x in np.arange(n_engi)]
+
+    casts = []
+
+    for t in engi_casts:
+
+      if t == 0:
+        t = -4.0
+
+      engi_explo = np.random.randint(213,288)
+      msg = 'ez-thro dynamite II'
+
+      explo_crit_roll = np.random.randint(0,1001)
+      if explo_crit_roll <= 50:
+        engi_explo = 2 * engi_explo
+        msg = 'ez-thro dynamite II crit'
 
       casts += [{'time':t,'attack':msg,'dmg':engi_explo,'cost':0}]
 
@@ -1748,14 +1802,11 @@ if st.sidebar.button('Calculate DPS'):
     hunter = make_hunter()
     globals()['hunter'] = hunter
 
-    global duration
-    duration = duration_wid
-
-    hunter = make_hunter()
-    globals()['hunter'] = hunter
-
     pet = make_pet()
     globals()['pet'] = pet
+
+    global duration
+    duration = duration_wid
 
     trials = []
 
