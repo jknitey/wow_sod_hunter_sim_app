@@ -9,6 +9,7 @@ import warnings
 import requests
 from bs4 import BeautifulSoup
 import re
+import copy
 
 
 # Ignore all warnings
@@ -46,194 +47,209 @@ def scrape(URL,string='',class_type='',link_type=''):
 #@title Hunter Setup
 def make_hunter():
 
-    hunter = {}
-    attributes = {'spec':spec}
+  hunter = {}
+  attributes = {'spec':spec}
 
-    if gear_wid != 'None':
-      loadout = export['stats']
+  if gear_wid != 'None':
+    loadout = export['stats']
 
-      hunter['str'] = loadout['strength']
-      hunter['agi'] = loadout['agility']
-      hunter['spirit'] = loadout['spirit']
-      hunter['int'] = loadout['intellect']
-      hunter['mana'] = loadout['mana']
+    hunter['str'] = loadout['strength']
+    hunter['agi'] = loadout['agility']
+    hunter['spirit'] = loadout['spirit']
+    hunter['int'] = loadout['intellect']
+    hunter['mana'] = loadout['mana']
 
 
-    if raid_buffs2['druid'] == True:
-      hunter['str'] = hunter['str'] + 8
-      hunter['agi'] = hunter['agi'] + 8
+  if raid_buffs2['druid'] == True:
+    hunter['str'] = hunter['str'] + 8
+    hunter['agi'] = hunter['agi'] + 8
 
-    if raid_buffs1['palahorn'] == True:
-      hunter['str'] = hunter['str'] + 6
-      hunter['agi'] = hunter['agi'] + 6
+  if raid_buffs1['palahorn'] == True:
+    hunter['str'] = hunter['str'] + 6
+    hunter['agi'] = hunter['agi'] + 6
 
-    if raid_buffs2['shamstr'] == True:
-      hunter['str'] = hunter['str'] + 6
+  if raid_buffs2['shamstr'] == True:
+    hunter['str'] = hunter['str'] + 36
 
-    #if raid_buffs1['shamagi'] == True:
-    #  hunter['agi'] = hunter['agi'] + 6
+  #if raid_buffs1['shamagi'] == True:
+  #  hunter['agi'] = hunter['agi'] + 6
 
+  try:
+    talent_points = attributes['spec'].split('hunter/')[1]
+  except ValueError:
+    print('Malformed url. Bad url. Not good url.')
+
+  talents = {}
+  try:
+    talents['bm'] = [int(x) for x in talent_points.split('-')[0]]
+  except:
+    talents['bm'] = [0]
+  try:
+    talents['mm'] = [int(x) for x in talent_points.split('-')[1]]
+  except:
+    talents['mm'] = [0]
+  try:
+    talents['sv'] = [int(x) for x in talent_points.split('-')[2]]
+  except:
+    talents['sv'] = [0]
+
+  hunter['spec'] = talents
+
+  if gear_wid != 'None':
     try:
-      talent_points = attributes['spec'].split('hunter/')[1]
-    except ValueError:
-      print('Use a wowhead classic hunter url.')
-
-    talents = {}
-    try:
-      talents['bm'] = [int(x) for x in talent_points.split('-')[0]]
+      hunter['hit'] =  loadout['hit']
     except:
-      talents['bm'] = [0]
+      hunter['hit'] = 0
+
+  try:
+    if hunter['spec']['sv'][10] != 0:
+        hunter['hit'] += int(hunter['spec']['sv'][10])
+  except:
+    pass
+
+  if gear_wid != 'None':
+    armor = pd.DataFrame(export['items'])
+    weapons = {}
+
+    mh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'MAIN_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
+    mh_range = (int(mh_range[1].split(':')[1]), int(mh_range[0]))
+
+    mh_mod = 0
+    oh_mod = 0
+
+    if enchant_wid == True:
+      mh_mod += 3
+      oh_mod += 3
+
+    if oh_stone == True:
+      oh_mod += 8
+
     try:
-      talents['mm'] = [int(x) for x in talent_points.split('-')[1]]
+      hunter['spd'] = (export['stats']['mainHandSpeed'], export['stats']['offHandSpeed'])
+      twoh_wid = False
+
+      oh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'OFF_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
+      oh_range = (int(oh_range[1].split(':')[1]), int(oh_range[0]))
+
+      weapons['dmg'] = ((mh_range[0] + mh_mod, oh_range[0] + oh_mod),(mh_range[1] + mh_mod, oh_range[1] + oh_mod))
+
     except:
-      talents['mm'] = [0]
+      hunter['spd'] = (export['stats']['mainHandSpeed'], 0)
+      twoh_wid = True
+
+      weapons['dmg'] = ((mh_range[0] + mh_mod, 0),(mh_range[1] + mh_mod, 0))
+
+    weapons['spd'] = hunter['spd']
+    hunter['wep'] = weapons['dmg']
+
+  if agi_elixir == True:
+    hunter['agi'] = hunter['agi'] + 25
+
+  if str_elixir == True:
+    hunter['str'] = hunter['str'] + 25
+
+  # lion
+  lion_buff = 1
+
+  if chest_runes == 'lion':
+    lion_buff = 1.21
+
+  elif raid_buffs2['hunterlion'] == True:
+    lion_buff = 1.1
+
+  hunter['int'] *= lion_buff
+  hunter['spirit'] *= lion_buff
+
+  agi_lion_buff = 1
+
+  if chest_runes == 'lion':
     try:
-      talents['sv'] = [int(x) for x in talent_points.split('-')[2]]
-    except:
-      talents['sv'] = [0]
-
-    hunter['spec'] = talents
-
-    if gear_wid != 'None':
-      try:
-        hunter['hit'] =  loadout['hit']
-      except:
-        hunter['hit'] = 0
-
-    try:
-      if hunter['spec']['sv'][10] != 0:
-          hunter['hit'] += int(hunter['spec']['sv'][10])
-    except:
-      pass
-
-    if gear_wid != 'None':
-      armor = pd.DataFrame(export['items'])
-      weapons = {}
-
-      mh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'MAIN_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
-      mh_range = (int(mh_range[1].split(':')[1]), int(mh_range[0]))
-
-      mh_mod = 0
-      oh_mod = 0
-
-      if enchant_wid == True:
-        mh_mod += 3
-        oh_mod += 3
-
-      if oh_stone == True:
-        oh_mod += 8
-
-      try:
-        hunter['spd'] = (export['stats']['mainHandSpeed'], export['stats']['offHandSpeed'])
-        twoh_wid = False
-
-        oh_range = str(scrape('https://www.wowhead.com/classic/item=' + str(armor[armor.slot == 'OFF_HAND'].id.to_list()[0]))).split('dmgmax1')[1][2:].split(',')
-        oh_range = (int(oh_range[1].split(':')[1]), int(oh_range[0]))
-
-        weapons['dmg'] = ((mh_range[0] + mh_mod, oh_range[0] + oh_mod),(mh_range[1] + mh_mod, oh_range[1] + oh_mod))
-
-      except:
-        hunter['spd'] = (export['stats']['mainHandSpeed'], 0)
-        twoh_wid = True
-
-        weapons['dmg'] = ((mh_range[0] + mh_mod, 0),(mh_range[1] + mh_mod, 0))
-
-      weapons['spd'] = hunter['spd']
-      hunter['wep'] = weapons['dmg']
-
-    if agi_elixir == True:
-      hunter['agi'] = hunter['agi'] + 25
-
-    if str_elixir == True:
-      hunter['str'] = hunter['str'] + 25
-
-    # lion
-    lion_buff = 1
-
-    if chest_runes == 'lion':
-      lion_buff = 1.21
-
-    elif raid_buffs2['hunterlion'] == True:
-      lion_buff = 1.1
-
-    hunter['str'] *= lion_buff
-    hunter['int'] *= lion_buff
-    hunter['spirit'] *= lion_buff
-
-    agi_lion_buff = 1
-
-    if chest_runes == 'lion':
-      try:
-        if hunter['spec']['sv'][14] != 0:
-          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.21
-      except:
-        pass
-
-    elif raid_buffs2['hunterlion'] == True:
-      try:
-        if hunter['spec']['sv'][14] != 0:
-          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.1
-      except:
-        pass
-
-    else:
-      try:
-        if hunter['spec']['sv'][14] != 0:
-          agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03)
-      except:
-        pass
-
-    hunter['agi'] *= agi_lion_buff
-
-
-    if mana_pot == True:
-      hunter['mana'] = hunter['mana'] + np.random.randint(700,901)
-
-    # melee stats
-    if gear_wid != 'None':
-      hunter['crit'] = loadout['rangedCrit'] - 2 # crit suppression 1% per level diff
-
-    if gear_wid != 'None':
-      hunter['ap'] = loadout['attackPower']
-
-    #if world_buffs['gnomer'] == True:
-    #  hunter['spd'] = (hunter['spd'][0] / 1.2, hunter['spd'][1] / 1.2)
-
-    if raid_buffs1['palamight'] == True:
-      hunter['ap'] = hunter['ap'] + 85
-
-    if raid_buffs1['warr'] == True:
-      hunter['ap'] = hunter['ap'] + 85
-
-    if raid_buffs1['mage'] == True:
-      hunter['mana'] = hunter['mana'] + (15 * 15)
-
-    if gear_wid != 'None':
-      hunter['rap'] = loadout['rangedAttackPower']
-
-    if raid_buffs2['hunterap'] == True:
-      hunter['ap'] = hunter['ap'] + 50
-      hunter['rap'] = hunter['rap'] + 50
-
-    if chest_runes == 'master marksman':
-      hunter['crit'] += 5
-
-    try:
-      if hunter['spec']['sv'][12] != 0:
-        hunter['crit'] += int(hunter['spec']['sv'][12])
+      if hunter['spec']['sv'][14] != 0:
+        agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.21
     except:
       pass
 
-    if raid_buffs3['feralcrit'] == True:
-      hunter['crit'] = hunter['crit'] + 3
+  elif raid_buffs2['hunterlion'] == True:
+    try:
+      if hunter['spec']['sv'][14] != 0:
+        agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03) + 0.1
+    except:
+      pass
 
-    return hunter
+  else:
+    try:
+      if hunter['spec']['sv'][14] != 0:
+        agi_lion_buff += (int(hunter['spec']['sv'][14]) * 0.03)
+    except:
+      pass
+
+  if mana_pot == True:
+    hunter['mana'] = hunter['mana'] + np.random.randint(700,901)
+
+  # melee stats
+  if gear_wid != 'None':
+    hunter['crit'] = loadout['rangedCrit'] - 2 # crit suppression 1% per level diff
+
+  if gear_wid != 'None':
+    hunter['ap'] = loadout['attackPower']
+    hunter['rap'] = loadout['rangedAttackPower']
+
+  #if world_buffs['gnomer'] == True:
+  #  hunter['spd'] = (hunter['spd'][0] / 1.2, hunter['spd'][1] / 1.2)
+
+  hunter['ap'] += hunter['str'] * (lion_buff - 1)
+  hunter['ap'] += hunter['agi'] * (agi_lion_buff - 1)
+  hunter['rap'] += 2 * (hunter['agi'] * (agi_lion_buff - 1))
+  hunter['crit'] += hunter['agi'] * (agi_lion_buff - 1) * 0.028
+
+  if raid_buffs1['palamight'] == True:
+    hunter['ap'] = hunter['ap'] + 85
+
+  if raid_buffs1['warr'] == True:
+    hunter['ap'] = hunter['ap'] + 85
+
+  if raid_buffs1['mage'] == True:
+    hunter['mana'] = hunter['mana'] + (15 * 15)
+
+  if raid_buffs2['hunterap'] == True:
+    hunter['ap'] = hunter['ap'] + 50
+    hunter['rap'] = hunter['rap'] + 50
+
+  if "Machinist's Gloves" in [x['name'] for x in export['items']]:
+    if mob_type_wid == 'mechanical':
+      hunter['ap'] = hunter['ap'] + 30
+
+  if chest_runes == 'master marksman':
+    hunter['crit'] += 5
+
+  try:
+    if hunter['spec']['sv'][12] != 0:
+      hunter['crit'] += int(hunter['spec']['sv'][12])
+  except:
+    pass
+
+  if raid_buffs3['feralcrit'] == True:
+    hunter['crit'] = hunter['crit'] + 3
+
+  if goldwrap_wid == 'hyperconductive goldwrap':
+    global goldwrap_flip
+    goldwrap_flip = np.random.randint(0,2)
+
+  return hunter
 
 #@title Pet Setup
 def make_pet():
   pet = {'spd': pett_spd,
          'ap': 0.22 * hunter['rap'],
          'type': pett}
+
+  # 8 at 25 (from first sim)
+  # 27.5 at 60 (from sixx)
+  # assuming linear growth the line connecting these point is y = 0.557143 x - 5.92857
+  # base dmg at 40 is 16.3
+  base_dps = 16.3
+
+  pet['dmg'] = (base_dps * 0.75, base_dps * 1.25)
 
   if str_scroll == True:
     pet['ap'] += 26 # pets get 2 ap for 1 str
@@ -245,7 +261,7 @@ def make_pet():
     pet['ap'] = pet['ap'] + 12
 
   if raid_buffs2['shamstr'] == True:
-    pet['ap'] = pet['ap'] + 12
+    pet['ap'] = pet['ap'] + 72
 
   if raid_buffs2['hunterap'] == True:
     pet['ap'] = pet['ap'] + 50
@@ -258,8 +274,6 @@ def make_pet():
 
   if (chest_runes == 'lion') or (raid_buffs2['hunterlion'] == True):
     pet['ap'] += 20 #lion/kings only increases pet base str
-
-  pet['dmg'] = (pet['ap'] * 0.273 * 1.25, pet['ap'] * 0.327 * 1.25)
 
   return pet
 
@@ -324,7 +338,7 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
       crit_mod = 2.0
 
       try:
-        if hunter['spec']['sv'][1] != 0:
+        if (hunter['spec']['sv'][1] != 0) and (mob_type_wid == 'human/beast'):
           crit_mod += int(hunter['spec']['sv'][1]) * 0.01
       except:
         pass
@@ -360,9 +374,8 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
         glance = (miss_upper+base, miss_upper+base+299) # 30% base at 15% reduced dmg
         crit_lower = miss_upper+base+300
     else:
-        glance = (0, 0) # no glance for yellow hits
+        glance = (-1, -1) # no glance for yellow hits
         crit_lower = miss_upper+base
-
 
     if spell == 'rs':
 
@@ -385,13 +398,8 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
         dmg = pet_auto()
 
     elif spell == 'rs':
-        if boot_runes == 'dual wield spec':
-          mh_dmg = melee(mh=True)
-          oh_dmg = melee(mh=False)
-          dmg = (mh_dmg[0] + oh_dmg[0] + 80, mh_dmg[1] + oh_dmg[1] + 80)
-        else:
-          dmg = melee(mh)
-          dmg = (dmg[0] + 80, dmg[1] + 80)
+        dmg = melee(mh)
+        dmg = (dmg[0] + 80, dmg[1] + 80)
 
     else:
         dmg = melee(mh)
@@ -402,15 +410,19 @@ def attack_table(roll, mh, hit = 0, pet = False, spell = ''):
     elif spell == 'fs':
 
         fs_roll = hunter['wep'][0][0] + (np.random.random() * (hunter['wep'][1][0] - hunter['wep'][0][0]))
-        dmg = (hunter['ap']/14 * hunter['spd'][0] + fs_roll) * 0.9
+        dmg = hunter['ap']/14 * hunter['spd'][0] + fs_roll
 
     elif spell == 'carve':
 
         mh_carve_roll = 0.25 * hunter['wep'][0][0] + (np.random.random() * (hunter['wep'][1][0] - hunter['wep'][0][0]))
 
         if twoh_wid != True:
-          oh_carve_roll = 0.125 * hunter['wep'][0][1] + (np.random.random() * (hunter['wep'][1][1] - hunter['wep'][0][1]))
-          dmg = (hunter['ap']/14 * hunter['spd'][0] + mh_carve_roll + oh_carve_roll)
+          if boot_runes != 'dual wield spec':
+            oh_carve_roll = 0.125 * hunter['wep'][0][1] + (np.random.random() * (hunter['wep'][1][1] - hunter['wep'][0][1]))
+            dmg = (hunter['ap']/14 * hunter['spd'][0] + mh_carve_roll + oh_carve_roll)
+          else:
+            oh_carve_roll = 0.125 * 1.5 * hunter['wep'][0][1] + (np.random.random() * (hunter['wep'][1][1] - hunter['wep'][0][1]))
+            dmg = (hunter['ap']/14 * hunter['spd'][0] + mh_carve_roll + oh_carve_roll)
 
         else:
           dmg = (hunter['ap']/14 * hunter['spd'][0] + mh_carve_roll)
@@ -470,19 +482,24 @@ def sim_autos(duration):
 
   global hunter
 
+  if goldwrap_wid == 'hyperconductive goldwrap':
+    hunter_crit = hunter['crit']
+    global goldwrap_flip
+    if goldwrap_flip == 1:
+      hunter['crit'] = hunter_crit + 3
+      goldwrap_trigger = 0
+
   n_mh = int(np.floor(duration / hunter['spd'][0]))
 
   if race_wid == 'orc':
     base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
     hunter_ap = hunter['ap']
-    hunter['ap'] = hunter_ap + base_ap
+    hunter['ap'] = hunter_ap + (base_ap * .25)
 
   try:
       n_oh = int(np.floor(duration / hunter['spd'][1]))
   except:
       n_oh = 0
-
-  mh_speed = hunter['spd'][0]
 
   bonus_haste = 1
 
@@ -495,6 +512,13 @@ def sim_autos(duration):
   if lw_wid == 'haste helm':
     bonus_haste += 0.2
 
+  if lw_wid == 'both':
+    bonus_haste += 0.3
+
+  if trinket_wid == 'gyromatic experiment 420b':
+    bonus_haste += 0.05
+
+  mh_speed = hunter['spd'][0]
   mh_speed = mh_speed / bonus_haste
 
   mh_hits = []
@@ -504,6 +528,12 @@ def sim_autos(duration):
       if race_wid == 'orc':
         if mh_time >= 15:
           hunter['ap'] = hunter_ap
+
+      if goldwrap_wid == 'hyperconductive goldwrap':
+        if (goldwrap_flip == 1) and (goldwrap_trigger == 0):
+          if mh_time >= 30:
+            hunter['crit'] = hunter_crit
+            goldwrap_trigger = 1
 
       event = attack_table(roll = np.random.randint(0,1001), mh = True, hit = hunter['hit'])
       mh_hits += [(mh_time,) + event]
@@ -517,38 +547,47 @@ def sim_autos(duration):
 
   else:
 
+    if race_wid == 'orc':
+      hunter['ap'] = hunter_ap + (base_ap * .25)
+
+    if goldwrap_wid == 'hyperconductive goldwrap':
+      if goldwrap_flip == 1:
+        hunter['crit'] = hunter_crit + 3
+        goldwrap_trigger = 0
+
+    oh_speed = hunter['spd'][1]
+    oh_speed = oh_speed / bonus_haste
+
+    oh_hits = []
+    oh_time = 0
+    for attack in np.arange(0,n_mh):
+
       if race_wid == 'orc':
-        base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
-        hunter_ap = hunter['ap']
-        hunter['ap'] = hunter_ap + base_ap
+        if oh_time >= 15:
+          hunter['ap'] = hunter_ap
 
+      if goldwrap_wid == 'hyperconductive goldwrap':
+        if (goldwrap_flip == 1) and (goldwrap_trigger == 0):
+          if mh_time >= 30:
+            hunter['crit'] = hunter_crit
+            goldwrap_trigger = 1
 
-      oh_speed = hunter['spd'][1]
+      event = attack_table(roll = np.random.randint(0,1001), mh = False, hit = hunter['hit'])
+      oh_hits += [(oh_time,) + event]
+      oh_time += oh_speed
 
-      oh_speed = oh_speed / bonus_haste
+      if (oh_time >= 10) and (oh_speed != hunter['spd'][0]):
+        oh_speed = hunter['spd'][1]
 
-      oh_hits = []
-      oh_time = 0
-      for attack in np.arange(0,n_oh):
-
-          if race_wid == 'orc':
-            if oh_time >= 15:
-              hunter['ap'] = hunter_ap
-
-          event = attack_table(roll = np.random.randint(0,1001), mh = False, hit = hunter['hit'])
-          oh_hits += [(oh_time,) + event]
-          oh_time += oh_speed
-
-          if (oh_time >= 10) and (oh_speed != hunter['spd'][1]):
-            oh_speed = hunter['spd'][1]
-
-      log = pd.DataFrame(mh_hits + oh_hits)
+    log = pd.DataFrame(mh_hits + oh_hits)
 
   log.columns = ['time','attack','dmg']
   log = log.sort_values('time').reset_index(drop=True)
   log.time = log.time.round(1)
 
   return log
+
+#@title On Next Hit Rotation
 
 #@title Sim Raptor Strike Placements
 def sim_raptor_strikes(white, duration):
@@ -632,6 +671,7 @@ def sim_flankings(raptors):
   flankings = pd.concat([raptors, flanking_strikes]).drop_duplicates().sort_values(['time','attack'])
 
   return flankings
+
 
 #@title Sim Rotation
 def sim_rotation(flankings):
@@ -826,16 +866,23 @@ def sim_priority_rotation(duration):
     cooldown['carve'] = 6 / 1.5
     carve = {'state': 'ready', 'cd': 0}
 
-  events = []
-
   if race_wid == 'orc':
     base_ap =  hunter['str'] +  hunter['agi'] + 80 - 20 # level * 2 = 80
     hunter_ap = hunter['ap']
-    hunter['ap'] = hunter_ap + base_ap
+    hunter['ap'] = hunter_ap + (base_ap * .25)
 
+  if goldwrap_wid == 'hyperconductive goldwrap':
+    hunter_crit = hunter['crit']
+    global goldwrap_flip
+
+    if goldwrap_flip == 1:
+      hunter['crit'] = hunter_crit + 3
+      goldwrap_trigger = 0
+
+  events = []
   for gcd in np.arange(0, globals):
 
-    if race_wid == 'orc':
+    if (race_wid == 'orc'):
       if gcd * 1.5 >= 15:
         hunter['ap'] = hunter_ap
 
@@ -848,6 +895,12 @@ def sim_priority_rotation(duration):
     if hand_runes == 'carve':
       if carve['cd'] <= gcd: carve['state'] = 'ready'
 
+    if goldwrap_wid == 'hyperconductive goldwrap':
+      if (goldwrap_flip == 1) and (goldwrap_trigger == 0):
+        if (gcd*1.5) >= 30:
+          hunter['crit'] = hunter_crit
+          goldwrap_trigger = 1
+
     # define spell behavior and rotation priority
 
     # flanking strike
@@ -857,13 +910,16 @@ def sim_priority_rotation(duration):
       events += [(gcd * 1.5, dmg[0], dmg[1])]
 
       pet_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
+      while 'glance' in pet_roll[0]:
+        pet_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
+
       if ('miss' not in pet_roll[0]) and ('dodge' not in pet_roll[0]):
         if 'crit' in pet_roll[0]:
           pet_crit_fs_mod = 2
         else:
           pet_crit_fs_mod = 1
 
-        pet_dmg = (gcd*1.5, 'pet fs ' + pet_roll[0].split(' ')[1].replace('glance','hit'), 0.35 * pet['spd'] * np.random.randint(int(pet_auto()[0]), int(pet_auto()[1])) * pet_crit_fs_mod)
+        pet_dmg = (gcd*1.5, 'pet fs ' + pet_roll[0].split(' ')[1], pet['spd'] * np.random.randint(int(pet_auto()[0]), int(pet_auto()[1])) * pet_crit_fs_mod)
       else:
         pet_dmg = (gcd*1.5, 'pet fs miss', 0)
 
@@ -900,6 +956,11 @@ def sim_priority_rotation(duration):
       dmg = attack_table(roll = np.random.randint(0,1001), mh = True, hit = hunter['hit'], spell = 'rs')
       buffed_dmg = dmg[1] * (1 + (flanking_buff['stacks'] * 0.1))
       events += [(gcd * 1.5, dmg[0], buffed_dmg)]
+
+      if boot_runes == 'dual wield spec':
+        oh_dmg = attack_table(roll = np.random.randint(0,1001), mh = False, hit = hunter['hit'], spell = 'rs')
+        oh_buffed_dmg = oh_dmg[1] * (1 + (flanking_buff['stacks'] * 0.1))
+        events += [(gcd * 1.5, 'oh ' + oh_dmg[0], oh_buffed_dmg)]
 
       rs_reset_roll = np.random.randint(0,1001)
       fs_reset_roll = np.random.randint(0,1001)
@@ -1118,16 +1179,14 @@ def sim_pet(duration):
     except:
       pass
 
-    # using old blizzard formulas result in pet autos that are ~2x too big from looking thru logs
-    # check sources for pet auto formulas to check for yourself
-    blizard_petauto_mod = 0.45
-
     n_hits = int(np.floor(duration / pet['spd']))
     pet_hits = []
     pet_time = 0
     for attack in np.arange(0,n_hits):
+
         dmg = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
-        mod_dmg = dmg[1] * pet_info['mod'] * spec_mod * bm_rune_mod * blizard_petauto_mod
+        mod_dmg = dmg[1] * pet_info['mod'] * spec_mod * bm_rune_mod * 1.25
+
         pet_hits += [(pet_time, dmg[0], mod_dmg)]
         pet_time += pet['spd']
 
@@ -1159,7 +1218,7 @@ def sim_pet(duration):
 
         def ws_dmg():
 
-          cast_dmg = (np.random.randint(pet_info['dmg'][0],pet_info['dmg'][1] + 1) + ws_sp_scaling) * pet_info['mod'] * spec_mod * bm_rune_mod
+          cast_dmg = (np.random.randint(pet_info['dmg'][0],pet_info['dmg'][1] + 1) + ws_sp_scaling) * pet_info['mod'] * spec_mod * bm_rune_mod * 1.25
 
           crit_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
 
@@ -1199,12 +1258,12 @@ def sim_pet(duration):
         max_claws = np.floor(total_focus / pet_info['cost']['claw'])
 
         cat_ap_scaling = {}
-        cat_ap_scaling['bite'] = pet['ap'] * 0.3
-        cat_ap_scaling['claw'] = pet['ap'] * 0.2
+        cat_ap_scaling['bite'] = pet['ap'] * 0.225
+        cat_ap_scaling['claw'] = pet['ap'] * 0.175
 
         def cat_dmg(spell):
 
-          cast_dmg = (np.random.randint(pet_info['dmg'][spell][0],pet_info['dmg'][spell][1] + 1) + cat_ap_scaling[spell]) * pet_info['mod'] * spec_mod * bm_rune_mod
+          cast_dmg = (np.random.randint(pet_info['dmg'][spell][0],pet_info['dmg'][spell][1] + 1) + cat_ap_scaling[spell]) * pet_info['mod'] * spec_mod * bm_rune_mod * 1.25
 
           crit_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
           if 'crit' in crit_roll[0]:
@@ -1252,12 +1311,12 @@ def sim_pet(duration):
         max_stomps = np.min([max_stomps, max_stomps_cd])
 
         monke_ap_scaling = {}
-        monke_ap_scaling['bite'] = pet['ap'] * 0.3
+        monke_ap_scaling['bite'] = pet['ap'] * 0.225
         monke_ap_scaling['stomp'] = pet['ap'] * 0.5
 
         def monke_dmg(spell):
 
-          cast_dmg = (np.random.randint(pet_info['dmg'][spell][0],pet_info['dmg'][spell][1] + 1) + monke_ap_scaling[spell]) * pet_info['mod'] * spec_mod * bm_rune_mod
+          cast_dmg = (np.random.randint(pet_info['dmg'][spell][0],pet_info['dmg'][spell][1] + 1) + monke_ap_scaling[spell]) * pet_info['mod'] * spec_mod * bm_rune_mod * 1.25
 
           crit_roll = attack_table(roll = np.random.randint(0,1001), mh = True, hit = np.floor(hunter['hit']), pet = True)
           if 'crit' in crit_roll[0]:
@@ -1455,6 +1514,12 @@ def sim_fight(duration, coh):
 
     dmg_mods = 1.0
 
+    try:
+      if (hunter['spec']['sv'][1] != 0) and (mob_type_wid == 'human/beast'):
+        dmg_mods += int(hunter['spec']['sv'][1]) * 0.01
+    except:
+      pass
+
     if world_buffs['dmf'] == True:
         dmg_mods += 0.1
 
@@ -1473,6 +1538,10 @@ def sim_fight(duration, coh):
       combat_log = combat_log[~combat_log.attack.str.contains('pet')]
     else:
       pass
+
+    if boss_armor_wid > 0:
+      combat_log.dmg = [y*(100 - boss_armor_wid)*0.01 if (('cast' not in x) & ('trap' not in x) & ('bomb' not in x) & ('dynamite' not in x) & ('sting' not in x) & ('stomp' not in x)) else y
+                        for x,y in zip(combat_log.attack,combat_log.dmg)]
 
     combat_log['total_dmg'] = combat_log.dmg.cumsum()
     combat_log['total_mana'] = hunter['mana'] -  combat_log.cost.cumsum()
@@ -1508,6 +1577,7 @@ def report(trials):
   results['avg_hit'] = (results['dmg'] / results['count']).astype(int)
   results['expected_casts'] = (results['count'] / iter).round(2)
   results['expected_dmg'] = (results['dmg'] / iter).astype(int)
+  results['expected_dps'] = ((results['dmg'] / iter).astype(int) / duration).round(1)
 
   results = results.reset_index()
 
@@ -1516,6 +1586,23 @@ def report(trials):
   pet_dmg = int((results[results.attack.str.contains('pet')].dmg.sum() / results.dmg.sum()).round(2) * 100)
 
   results = results.drop(['count','dmg'],axis = 1).sort_values('expected_dmg',ascending=False)
+
+  r = copy.copy(results)
+  r['main_attack'] = [x.replace('crit','').replace('hit','').replace('glance','').replace('oh rs','rs').replace('oh','melee').replace('mh','melee') for x in r.attack]
+  r['main_attack'] = ['wf' if 'wf' in x else x for x in r['main_attack']]
+  r['main_attack'] = ['pet' if 'pet' in x else x for x in r['main_attack']]
+  r = r.drop(['attack', 'avg_hit'],axis=1).rename(columns={'main_attack':'attack'})
+
+  mins = r[['attack','min_hit']]
+  mins = mins.groupby('attack').min().reset_index()
+
+  maxs = r[['attack','max_hit']]
+  maxs = maxs.groupby('attack').max().reset_index()
+
+  stats = r[['attack','expected_casts','expected_dmg','expected_dps']]
+  stats = stats.groupby('attack').sum().reset_index()
+
+  r = mins.merge(maxs).merge(stats).sort_values('expected_dps',ascending=False)
 
   print('\n')
   print(('avg', np.mean(dps).round(1),'max', np.max(dps), 'std', np.std(dps).round(1)))
@@ -1530,7 +1617,10 @@ def report(trials):
   plt.xlabel('dps')
   plt.show()
 
-  print('\n\n\nsummary over all iterations:')
+  print('\n\n\ncompact summary over all iterations:')
+  display(r.reset_index(drop=True))
+
+  print('\n\n\ndetailed summary over all iterations:')
   display(results.reset_index(drop=True))
 
   print('\n\n\nrandom iteration:')
@@ -1650,10 +1740,21 @@ st.write('Please report any bugs to discord: @zzenn777')
 # Add Text Section for User Instructions
 st.header("Instructions:", divider=True)
 st.markdown("""
-# Latest Version: Feb 3 2024
-- swapped gear options for 60upgrades export string (RESET ALL TALENTS AND BUFFS BEFORE EXPORT)
-- added pet crit scaling
-- optimized to improve iterations/sec
+# Latest Version: Feb 6 2024
+- fixed pet auto and pet flanking strike formulas so they more closely match 25 logs and scale better to 40
+- separated mh and oh rs hits from dual wield spec
+- removed stat weights while I optimize them (takes too long)
+- added compact view for results
+- added expected dps to results
+- fixed a bug rarely causing yellows to glance
+- dual wield spec now buffs carve
+- added option for both lw items
+- added option to calc stat weights off currently equipped gear
+- added slider for boss armor
+- added mob type
+- ap from mechanical specific bonuses now counts
+- added trinket gyromatic experiment 420b (set to 1 stack and 10s for now)
+- added belt Hyperconductive Goldwrap
 
 # How to Use This Sim:
 - Set encounter info:
@@ -1722,9 +1823,12 @@ with col3:
     hand_runes = st.selectbox('Hand rune:', ['beast master', 'carve', None], index=1)
 
 st.subheader('Encounter options')
-lw_wid = st.selectbox('leather:', ['haste gloves','haste helm', None], index=1)
-engi_wid = st.selectbox('engineering:', ['high-yield radiation bomb', None], index=0)
+lw_wid = st.selectbox('leather:', ['haste gloves','haste helm','both',None], index=1)
+engi_wid = st.selectbox('engineering:', ['high-yield radiation bomb','ez-thro dynamite II', None], index=0)
 trap_wid = st.selectbox('rotation:', ['pre-pull immolation trap','max immolation trap'], index=0)
+goldwrap_wid = st.selectbox('engi belt:', ['hyperconductive goldwrap', None], index=0)
+mob_type_wid = st.selectbox('mob type:', ['human/beast','mechanical'], index=0)
+trinket_wid = st.selectbox('trinket:', ['gyromatic experiment 420b', None], index=0)
 
 st.header('Weapon options', divider=True)
 col1, col2 = st.columns(2)
@@ -1787,6 +1891,9 @@ with col3:
     world_buffs = {}
     world_buffs['dmf'] = st.checkbox('Darkmoon Faire', value=True)
     # world_buffs['gnomer'] = st.checkbox('Spark of Inspiration', disabled=True)
+
+st.subheader('Boss armor')
+boss_armor_wid = st.slider('% Mitigation from Boss Armor:', min_value=0, step=1, value=0)
 
 
 iter = st.number_input('Number of iterations:', min_value=100, value=300, step=1)
